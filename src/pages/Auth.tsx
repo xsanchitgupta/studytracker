@@ -43,23 +43,40 @@ const Auth = () => {
     }
   };
 
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      await signIn(email, password);
-      toast({ title: "Welcome back!", description: "Successfully signed in." });
-      navigate("/dashboard");
-    } catch (error: any) {
-      toast({
-        title: "Sign in failed",
-        description: getFriendlyErrorMessage(error.code),
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+const handleSignIn = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsLoading(true);
+
+  try {
+    const userCredential = await signIn(email, password);
+
+    // ADMIN BYPASS FOR EMAIL VERIFICATION
+    if (
+      !userCredential.user.emailVerified &&
+      userCredential.user.email !== "admin@studytrack.edu"
+    ) {
+      throw { code: "auth/unverified-email" };
     }
-  };
+
+    toast({ title: "Welcome back!", description: "Successfully signed in." });
+
+    navigate(
+      userCredential.user.email === "admin@studytrack.edu"
+        ? "/admin"
+        : "/dashboard"
+    );
+  } catch (error: any) {
+    toast({
+      title: "Sign in failed",
+      description: getFriendlyErrorMessage(error.code),
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();

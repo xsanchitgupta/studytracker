@@ -13,7 +13,8 @@ import NotFound from "./pages/NotFound";
 import Goals from "./pages/goals";
 import Playlists from "./pages/Playlists";
 import Profile from "./pages/Profile";
-
+import { AdminRoute } from "@/components/AdminRoute";
+import AdminPanel from "./pages/AdminPanel";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,15 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
+              <Route
+                path="/admin"
+                element={
+                  <AdminRoute>
+                    <AdminPanel />
+                  </AdminRoute>
+                }
+              />
+
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
               <Route
@@ -37,7 +47,7 @@ const App = () => (
                 }
               />
               <Route
-              path="/goals"
+                path="/goals"
                 element={
                   <ProtectedRoute>
                     <Goals />
@@ -45,7 +55,7 @@ const App = () => (
                 }
               />
               <Route
-              path="/Playlists"
+                path="/Playlists"
                 element={
                   <ProtectedRoute>
                     <Playlists />
@@ -53,7 +63,7 @@ const App = () => (
                 }
               />
               <Route
-              path="/Profile"
+                path="/Profile"
                 element={
                   <ProtectedRoute>
                     <Profile />
