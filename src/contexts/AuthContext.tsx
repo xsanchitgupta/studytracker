@@ -15,8 +15,6 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
-const ADMIN_EMAIL = "admin@studytrack.edu";
-
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -45,31 +43,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      // 🔐 EMAIL VERIFICATION GUARD (ADMIN BYPASS)
-      if (
-        firebaseUser &&
-        firebaseUser.email &&
-        firebaseUser.email !== ADMIN_EMAIL && // 👈 ADMIN EXCLUDED
-        !firebaseUser.emailVerified &&
-        firebaseUser.providerData.some(
-          (p) => p.providerId === "password"
-        )
-      ) {
-        setUser(null);
-      } else {
-        setUser(firebaseUser);
-      }
-
+      setUser(firebaseUser); // ✅ NO FILTERING
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  // 🔹 SIMPLE SIGN IN (NO VERIFICATION LOGIC HERE)
-  const signIn = (email: string, password: string) => {
-    return signInWithEmailAndPassword(auth, email, password);
-  };
+  const signIn = (email: string, password: string) =>
+    signInWithEmailAndPassword(auth, email, password);
 
   const signUp = async (email: string, password: string) => {
     const result = await createUserWithEmailAndPassword(
@@ -79,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     );
     if (result.user) {
       await sendEmailVerification(result.user);
-      await signOut(auth); // prevent auto-login
+      await signOut(auth);
     }
   };
 
@@ -100,11 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     phoneNumber: string,
     recaptchaVerifier: RecaptchaVerifier
   ) => {
-    return signInWithPhoneNumber(
-      auth,
-      phoneNumber,
-      recaptchaVerifier
-    );
+    return signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
   };
 
   const verifyPhoneOTP = async (
@@ -136,9 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error(
-      "useAuth must be used within an AuthProvider"
-    );
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

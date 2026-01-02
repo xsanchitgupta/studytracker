@@ -21,5 +21,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return <Navigate to="/auth" replace />;
   }
 
+  if (user && !user.emailVerified && user.providerData[0]?.providerId === "password") {
+    return <Navigate to="/verify-email" />;
+  }
+
   return <>{children}</>;
 };

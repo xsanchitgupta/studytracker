@@ -113,6 +113,9 @@ export default function Playlists() {
   const [showSymbolPad, setShowSymbolPad] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const symbolButtonRef = useRef<HTMLButtonElement | null>(null);
+  const symbolPopupRef = useRef<HTMLDivElement | null>(null);
+
   /* ===== PATCH: TAG + PDF + AI STATES ===== */
   const [activeTags, setActiveTags] = useState<NoteTag[]>([]);
   const [showMathPad, setShowMathPad] = useState(false);
@@ -146,6 +149,34 @@ export default function Playlists() {
   const [aiSummary, setAiSummary] = useState("");
 
   /* ---------- LOAD PLAYLISTS ---------- */
+  useEffect(() => {
+    if (!playlists.length || active) return;
+
+    for (const p of playlists) {
+      const next = p.lectures.find(l => !l.completed);
+      if (next) {
+        setActive({ pid: p.id, lid: next.id });
+        break;
+      }
+    }
+  }, [playlists]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        symbolPopupRef.current &&
+        !symbolPopupRef.current.contains(e.target as Node) &&
+        symbolButtonRef.current &&
+        !symbolButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowSymbolPad(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   useEffect(() => {
     if (!user) return;
 
@@ -331,12 +362,9 @@ export default function Playlists() {
     }, 600);
   };
 
-  const insertSymbol = (symbol: string) => {
-    const textarea = document.getElementById(
-      "notes-area"
-    ) as HTMLTextAreaElement;
-
-    if (!textarea) return;
+  const insertSymbol = async (symbol: string) => {
+    const textarea = document.getElementById("notes-area") as HTMLTextAreaElement;
+    if (!textarea || !active || !user) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
@@ -347,15 +375,33 @@ export default function Playlists() {
       localNotes.slice(end);
 
     setLocalNotes(updated);
-    updateNotesDebounced(updated);
+    setSaveStatus("saving");
+
+    const p = playlists.find((p) => p.id === active.pid);
+    if (!p) return;
+
+    const updatedLectures = p.lectures.map((l) =>
+      l.id === active.lid ? { ...l, notes: sanitizeNotes(updated) } : l
+    );
+
+    await updateDoc(
+      doc(db, "users", user.uid, "playlists", p.id),
+      { lectures: updatedLectures }
+    );
+
+    setPlaylists((ps) =>
+      ps.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x))
+    );
+
+    setSaveStatus("saved");
 
     requestAnimationFrame(() => {
       textarea.focus();
-      textarea.selectionStart =
-        textarea.selectionEnd =
+      textarea.selectionStart = textarea.selectionEnd =
         start + symbol.length;
     });
   };
+
 
   const insertAtCursor = (snippet: string) => {
     const textarea = document.getElementById("notes-area") as HTMLTextAreaElement;
@@ -436,7 +482,11 @@ export default function Playlists() {
       .replace(/√/g, "sqrt")
       .replace(/π/g, "pi")
       .replace(/≤/g, "<=")
-      .replace(/≥/g, ">=");
+      .replace(/≥/g, ">=")
+      .replace(/≠/g, "!=")
+      .replace(/≈/g, "~")
+      .replace(/∞/g, "infinity");
+
 
     const lines = pdf.splitTextToSize(safeText || "No notes", 500);
 
@@ -444,6 +494,12 @@ export default function Playlists() {
 
     pdf.save(`${current.title}-notes.pdf`);
   };
+  const getPlaylistProgress = (p: Playlist) => {
+    if (p.lectures.length === 0) return 0;
+    const done = p.lectures.filter(l => l.completed).length;
+    return Math.round((done / p.lectures.length) * 100);
+  };
+
   const deletePlaylist = async (pid: string) => {
     if (!user) return;
     await deleteDoc(doc(db, "users", user.uid, "playlists", pid));
@@ -547,25 +603,83 @@ export default function Playlists() {
 
               {playlists.map((p) => (
                 <Card key={p.id}>
-                  <CardHeader>
+                  <CardHeader className="space-y-2">
                     <CardTitle className="text-base">{p.title}</CardTitle>
+
+                    {(() => {
+                      const progress = getPlaylistProgress(p);
+
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>{progress}% completed</span>
+                            <span>
+                              {p.lectures.filter(l => l.completed).length}/{p.lectures.length}
+                            </span>
+                          </div>
+
+                          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </CardHeader>
+
 
                   <CardContent className="space-y-2">
                     {p.lectures.map((l) => (
                       <div
                         key={l.id}
                         onClick={() => setActive({ pid: p.id, lid: l.id })}
-                        className={`group flex gap-3 p-3 rounded-xl cursor-pointer transition-all ${active?.lid === l.id
-                          ? "bg-muted ring-1 ring-primary/30"
-                          : "hover:bg-muted/50"
-                          }`}
+                        className={`
+    relative group flex gap-3 p-3 rounded-xl cursor-pointer
+    transition-all
+    ${active?.lid === l.id ? "bg-muted ring-1 ring-primary/30" : "hover:bg-muted/50"}
+  `}
                       >
+
                         <div className="relative w-28 aspect-video bg-black rounded overflow-hidden">
                           <img
                             src={`https://img.youtube.com/vi/${l.videoId}/mqdefault.jpg`}
                             className="w-full h-full object-cover"
                           />
+                          {/* HOVER ACTIONS */}
+                          <div
+                            className="
+    absolute bottom-2 right-2
+    opacity-0 group-hover:opacity-100
+    transition
+    flex gap-1
+  "
+                          >
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleComplete(p, l.id);
+                              }}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFocusMode(true);
+                                setActive({ pid: p.id, lid: l.id });
+                              }}
+                            >
+                              <Focus className="h-4 w-4" />
+                            </Button>
+                          </div>
+
                           {l.completed && (
                             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                               <Check className="text-white" />
@@ -641,16 +755,22 @@ export default function Playlists() {
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-semibold">📝 Study Notes</h3>
                         {/* ===== PATCH 10: SAVE STATUS UI ===== */}
+                        
+                        {isDirtyRef.current && (
+                          <span className="text-xs text-muted-foreground">
+                            Unsaved changes
+                          </span>
+                        )}
                         <div className="text-xs text-muted-foreground">
                           {saveStatus === "typing" && "✍️ Typing…"}
                           {saveStatus === "saving" && "💾 Saving…"}
                           {saveStatus === "saved" && "✅ All changes saved"}
                         </div>
-
                         <div className="flex gap-2">
                           <Button
                             size="sm"
                             variant="outline"
+                            disabled={!localNotes.trim()}
                             onClick={exportNotesPdf}
                           >
                             📄 Export PDF
@@ -728,27 +848,30 @@ area = πr²`}
 
                         {/* Keyboard icon (bottom-right) */}
                         <button
+                          ref={symbolButtonRef}
                           type="button"
-                          onClick={() => setShowSymbolPad((s) => !s)}
+                          onClick={() => setShowSymbolPad(true)}
                           className="absolute bottom-3 right-3 text-muted-foreground hover:text-primary"
-                          title="Insert symbols"
                         >
                           ⌨️
                         </button>
+
                       </div>
 
                       {/* SYMBOL PICKER */}
                       {showSymbolPad && (
                         <div
+                          ref={symbolPopupRef}
                           className="
-      fixed bottom-0 left-0 right-0 z-50
-      sm:static
-      bg-background sm:bg-muted
-      border-t sm:border
-      rounded-t-2xl sm:rounded-xl
-      p-4
-      max-h-[45vh]
+      absolute bottom-14 right-2 z-50
+      w-[320px]
+      max-h-[280px]
       overflow-y-auto
+      rounded-xl
+      border
+      bg-background
+      shadow-2xl
+      p-3
     "
                         >
                           <div className="space-y-3">
@@ -762,7 +885,14 @@ area = πr²`}
                                     <button
                                       key={s}
                                       onClick={() => insertSymbol(s)}
-                                      className="h-9 min-w-[36px] px-2 rounded-lg border bg-background hover:bg-primary hover:text-primary-foreground text-sm"
+                                      className="
+                  h-9 min-w-[36px]
+                  rounded-lg
+                  border
+                  bg-muted
+                  hover:bg-primary hover:text-primary-foreground
+                  text-sm
+                "
                                     >
                                       {s}
                                     </button>
@@ -773,6 +903,7 @@ area = πr²`}
                           </div>
                         </div>
                       )}
+
                       {aiError && (
                         <p className="text-sm text-red-500">{aiError}</p>
                       )}
