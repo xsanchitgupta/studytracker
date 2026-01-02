@@ -1,7 +1,6 @@
-import { MathJax, MathJaxContext } from "better-react-mathjax";
-import jsPDF from "jspdf";
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
 import {
   collection,
   addDoc,
@@ -28,9 +27,6 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
-
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 import {
   ArrowLeft,
@@ -92,7 +88,7 @@ function sanitizeNotes(input: string): string {
     .replace(/[‘’]/g, "'")
 
     // remove control characters except newline & tab
-    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
+    .replace(/[^\p{L}\p{N}\p{P}\p{S}\p{Z}\n\t]/gu, "")
 
     // limit repeated symbols
     .replace(/([*_=~`]){4,}/g, "$1$1$1")
@@ -103,22 +99,25 @@ function sanitizeNotes(input: string): string {
     .join("\n");
 }
 
-/* ===== PATCH: MATHJAX CONFIG ===== */
-const mathJaxConfig = {
-  loader: { load: ["input/tex", "output/chtml"] },
-  tex: {
-    inlineMath: [["$", "$"]],
-    displayMath: [["$$", "$$"]],
-  },
-};
-
 /* ================= PAGE ================= */
 export default function Playlists() {
+  const SYMBOL_GROUPS = {
+    Operators: ["+", "−", "×", "÷", "=", "≠", "≈"],
+    Relations: ["<", ">", "≤", "≥", "∈", "∉"],
+    Constants: ["π", "∞", "°"],
+    Calculus: ["∑", "∏", "∫", "∂"],
+    Greek: ["α", "β", "γ", "Δ", "θ", "λ", "μ"],
+    Arrows: ["→", "←", "↔"],
+  };
+
+  const [showSymbolPad, setShowSymbolPad] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   /* ===== PATCH: TAG + PDF + AI STATES ===== */
   const [activeTags, setActiveTags] = useState<NoteTag[]>([]);
   const [showMathPad, setShowMathPad] = useState(false);
+  const [aiPreview, setAiPreview] = useState("");
+  const [aiError, setAiError] = useState("");
 
   const watchStartRef = useRef<number | null>(null);
   const notesSaveTimer = useRef<NodeJS.Timeout | null>(null);
@@ -144,9 +143,7 @@ export default function Playlists() {
   const isDirtyRef = useRef(false);
 
   const [localNotes, setLocalNotes] = useState("");
-  const [previewMode, setPreviewMode] = useState(false);
   const [aiSummary, setAiSummary] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
 
   /* ---------- LOAD PLAYLISTS ---------- */
   useEffect(() => {
@@ -174,13 +171,20 @@ export default function Playlists() {
     };
   }, []);
 
-  /* ---------- SYNC NOTES ON LECTURE CHANGE ---------- */
+  const current =
+    active &&
+    playlists
+      .find((p) => p.id === active.pid)
+      ?.lectures.find((l) => l.id === active.lid);
+
+  /* ---------- SYNC NOTES ---------- */
   useEffect(() => {
     if (!current) return;
     setLocalNotes(current.notes || "");
     setAiSummary(current.aiSummary || "");
     setActiveTags(current.tags || []);
   }, [active]);
+
 
 
   /* ---------- WATCH TIME (SAFE) ---------- */
@@ -294,11 +298,15 @@ export default function Playlists() {
 
   const updateNotesDebounced = (text: string) => {
     setLocalNotes(text);
+    setSaveStatus("typing");
+    isDirtyRef.current = true;
 
     if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
 
     notesSaveTimer.current = setTimeout(async () => {
       if (!active) return;
+
+      setSaveStatus("saving");
 
       const p = playlists.find((p) => p.id === active.pid);
       if (!p) return;
@@ -317,46 +325,36 @@ export default function Playlists() {
       setPlaylists((ps) =>
         ps.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
       );
+
+      setSaveStatus("saved");
+      isDirtyRef.current = false;
     }, 600);
   };
 
+  const insertSymbol = (symbol: string) => {
+    const textarea = document.getElementById(
+      "notes-area"
+    ) as HTMLTextAreaElement;
 
-  const autoMathify = (text: string) => {
-    if (!text) return text;
+    if (!textarea) return;
 
-    let t = text;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
 
-    // Normalize spacing
-    t = t.replace(/\s*=\s*/g, " = ");
+    const updated =
+      localNotes.slice(0, start) +
+      symbol +
+      localNotes.slice(end);
 
-    // Detect equations (a = b, v = u + at, etc.)
-    t = t.replace(
-      /\b([a-zA-Z][a-zA-Z0-9]*)\s*=\s*([^\n]+)/g,
-      (_, lhs, rhs) => `$${lhs} = ${rhs}$`
-    );
+    setLocalNotes(updated);
+    updateNotesDebounced(updated);
 
-    // Fractions: 1/2 → \frac{1}{2}
-    t = t.replace(/\b(\d+)\s*\/\s*(\d+)\b/g, "\\\\frac{$1}{$2}");
-
-    // Variables / powers: x^2
-    t = t.replace(/\b([a-zA-Z])\s*\^\s*(\d+)\b/g, "$1^{$2}");
-
-    // sqrt(x)
-    t = t.replace(/\bsqrt\((.*?)\)/gi, "\\\\sqrt{$1}");
-
-    // constants
-    t = t.replace(/\bpi\b/gi, "\\pi");
-
-    return t;
-  };
-
-
-  const normalizeFormulas = (text: string) => {
-    return text
-      .replace(/\bforce formula\b/gi, "$F = ma$")
-      .replace(/\ba\/b\b/gi, "$\\frac{a}{b}$")
-      .replace(/\bsqrt\((.*?)\)/gi, "$\\\\sqrt{$1}$")
-      .replace(/\bpi\b/gi, "$\\pi$");
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart =
+        textarea.selectionEnd =
+        start + symbol.length;
+    });
   };
 
   const insertAtCursor = (snippet: string) => {
@@ -414,91 +412,38 @@ export default function Playlists() {
     );
   };
 
-
-  /* ===== PATCH 8: AI SUMMARY V2 (TAG AWARE) ===== */
-  const generateAiSummary = async () => {
-    if (!active || !user || !localNotes.trim()) return;
-
-    setAiLoading(true);
-
-    // simulate AI delay (future: OpenAI / Gemini)
-    await new Promise((r) => setTimeout(r, 1200));
-
-    const lines = localNotes
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    const important: string[] = [];
-    const formulas: string[] = [];
-    const doubts: string[] = [];
-    const general: string[] = [];
-
-    for (const line of lines) {
-      if (activeTags.includes("formula") && line.includes("$")) {
-        formulas.push(line);
-      } else if (activeTags.includes("doubt") && line.endsWith("?")) {
-        doubts.push(line);
-      } else if (activeTags.includes("important")) {
-        important.push(line);
-      } else {
-        general.push(line);
-      }
-    }
-
-    const summaryBlocks: string[] = [];
-
-    if (important.length)
-      summaryBlocks.push("⭐ Important\n" + important.slice(0, 4).map(l => `• ${l}`).join("\n"));
-
-    if (formulas.length)
-      summaryBlocks.push("➕ Formulas\n" + formulas.slice(0, 3).map(l => `• ${l}`).join("\n"));
-
-    if (doubts.length)
-      summaryBlocks.push("❓ Doubts\n" + doubts.slice(0, 3).map(l => `• ${l}`).join("\n"));
-
-    if (!summaryBlocks.length)
-      summaryBlocks.push("📌 Summary\n" + general.slice(0, 5).map(l => `• ${l}`).join("\n"));
-
-    const finalSummary = summaryBlocks.join("\n\n");
-
-    // 🔒 SAVE TO FIRESTORE
-    const p = playlists.find((p) => p.id === active.pid);
-    if (!p) return;
-
-    const updatedLectures = p.lectures.map((l) =>
-      l.id === active.lid ? { ...l, aiSummary: finalSummary } : l
-    );
-
-    await updateDoc(
-      doc(db, "users", user.uid, "playlists", p.id),
-      { lectures: updatedLectures }
-    );
-
-    setPlaylists((ps) =>
-      ps.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x))
-    );
-
-    setAiSummary(finalSummary);
-    setAiLoading(false);
-  };
-
-
   /* ===== PATCH: EXPORT NOTES TO PDF ===== */
   const exportNotesPdf = () => {
     if (!current) return;
 
-    const pdf = new jsPDF();
-    pdf.setFontSize(14);
-    pdf.text(current.title, 10, 15);
+    const pdf = new jsPDF({
+      unit: "pt",
+      format: "a4",
+    });
 
-    pdf.setFontSize(10);
-    const text = pdf.splitTextToSize(localNotes || "No notes", 180);
-    pdf.text(text, 10, 30);
+    const margin = 40;
+    let y = margin;
+
+    pdf.setFontSize(16);
+    pdf.text(current.title, margin, y);
+    y += 30;
+
+    pdf.setFontSize(11);
+
+    const safeText = (localNotes || "")
+      .replace(/×/g, "x")
+      .replace(/÷/g, "/")
+      .replace(/√/g, "sqrt")
+      .replace(/π/g, "pi")
+      .replace(/≤/g, "<=")
+      .replace(/≥/g, ">=");
+
+    const lines = pdf.splitTextToSize(safeText || "No notes", 500);
+
+    pdf.text(lines, margin, y);
 
     pdf.save(`${current.title}-notes.pdf`);
   };
-
   const deletePlaylist = async (pid: string) => {
     if (!user) return;
     await deleteDoc(doc(db, "users", user.uid, "playlists", pid));
@@ -544,12 +489,6 @@ export default function Playlists() {
   };
 
   const nextLecture = flatLectures.find((l) => !l.completed);
-
-  const current =
-    active &&
-    playlists
-      .find((p) => p.id === active.pid)
-      ?.lectures.find((l) => l.id === active.lid);
 
   /* ================= UI ================= */
 
@@ -599,10 +538,7 @@ export default function Playlists() {
                 <CardContent className="flex gap-2 p-3">
                   <Input
                     value={newPlaylist}
-                    onChange={(e) =>
-                      updateNotesDebounced(sanitizeNotes(e.target.value))
-                    }
-
+                    onChange={(e) => setNewPlaylist(e.target.value)}
                     placeholder="Create playlist"
                   />
                   <Button onClick={addPlaylist}><Plus /></Button>
@@ -719,12 +655,6 @@ export default function Playlists() {
                           >
                             📄 Export PDF
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setPreviewMode(!previewMode)}>
-                            {previewMode ? "Edit" : "Preview"}
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={generateAiSummary} disabled={aiLoading}>
-                            {aiLoading ? "Summarizing…" : "✨ AI Summary"}
-                          </Button>
                         </div>
                       </div>
 
@@ -755,17 +685,6 @@ export default function Playlists() {
                         </Button>
                       </div>
 
-                      {/* ===== PATCH-11: MATH KEYBOARD ===== */}
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setShowMathPad(!showMathPad)}
-                        >
-                          ➕ Insert Formula
-                        </Button>
-                      </div>
-
                       {showMathPad && (
                         < div className="flex flex-wrap gap-2">
                           <Button size="sm" variant="outline" onClick={() => insertAtCursor("$F = ma$")}>
@@ -792,31 +711,70 @@ export default function Playlists() {
                       )}
 
 
-                      {!previewMode ? (
+                      {/* NOTES INPUT WITH SYMBOL KEYBOARD */}
+                      <div className="relative">
                         <Textarea
                           id="notes-area"
                           value={localNotes}
                           onChange={(e) => updateNotesDebounced(e.target.value)}
-                          className="min-h-[200px]"
-                          placeholder={`Markdown supported
+                          className="min-h-[220px] pr-12"
+                          placeholder={`Write notes normally.
 
-• Concept:
-• Formula: $F=ma$
-• Example:
-• Doubt:`}
+Examples:
+force = mass × acceleration
+angle = 90°
+area = πr²`}
                         />
-                      ) : (
-                        <div className="prose prose-invert max-w-none rounded-xl border p-4">
-                          <MathJaxContext config={mathJaxConfig}>
-                            <MathJax dynamic>
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {autoMathify(localNotes)}
-                              </ReactMarkdown>
-                            </MathJax>
-                          </MathJaxContext>
 
+                        {/* Keyboard icon (bottom-right) */}
+                        <button
+                          type="button"
+                          onClick={() => setShowSymbolPad((s) => !s)}
+                          className="absolute bottom-3 right-3 text-muted-foreground hover:text-primary"
+                          title="Insert symbols"
+                        >
+                          ⌨️
+                        </button>
+                      </div>
+
+                      {/* SYMBOL PICKER */}
+                      {showSymbolPad && (
+                        <div
+                          className="
+      fixed bottom-0 left-0 right-0 z-50
+      sm:static
+      bg-background sm:bg-muted
+      border-t sm:border
+      rounded-t-2xl sm:rounded-xl
+      p-4
+      max-h-[45vh]
+      overflow-y-auto
+    "
+                        >
+                          <div className="space-y-3">
+                            {Object.entries(SYMBOL_GROUPS).map(([group, symbols]) => (
+                              <div key={group}>
+                                <p className="text-xs font-semibold text-muted-foreground mb-1">
+                                  {group}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {symbols.map((s) => (
+                                    <button
+                                      key={s}
+                                      onClick={() => insertSymbol(s)}
+                                      className="h-9 min-w-[36px] px-2 rounded-lg border bg-background hover:bg-primary hover:text-primary-foreground text-sm"
+                                    >
+                                      {s}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-
+                      )}
+                      {aiError && (
+                        <p className="text-sm text-red-500">{aiError}</p>
                       )}
 
                       {aiSummary && (
