@@ -16,6 +16,12 @@ import Profile from "./pages/Profile";
 import { AdminRoute } from "@/components/AdminRoute";
 import AdminPanel from "./pages/AdminPanel";
 
+// NEW IMPORTS
+import Leaderboard from "./pages/Leaderboard";
+import Chat from "./pages/Chat";
+import Performance from "./pages/Performance";
+import Flashcards from "./pages/Flashcards";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -55,7 +61,7 @@ const App = () => (
                 }
               />
               <Route
-                path="/Playlists"
+                path="/playlists"
                 element={
                   <ProtectedRoute>
                     <Playlists />
@@ -63,14 +69,47 @@ const App = () => (
                 }
               />
               <Route
-                path="/Profile"
+                path="/profile"
                 element={
                   <ProtectedRoute>
                     <Profile />
                   </ProtectedRoute>
                 }
               />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              {/* NEW ROUTES */}
+              <Route
+                path="/leaderboard"
+                element={
+                  <ProtectedRoute>
+                    <Leaderboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <ProtectedRoute>
+                    <Chat />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/performance"
+                element={
+                  <ProtectedRoute>
+                    <Performance />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/flashcards"
+                element={
+                  <ProtectedRoute>
+                    <Flashcards />
+                  </ProtectedRoute>
+                }
+              />
+
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

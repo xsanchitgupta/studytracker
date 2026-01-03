@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { getEarnedBadges, Badge } from "@/lib/badges";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import { ArrowLeft, LogOut, Save, GraduationCap, School, Camera } from "lucide-react";
+import { ArrowLeft, LogOut, Save, GraduationCap, School, Camera, Medal } from "lucide-react";
 
 export default function Profile() {
   const { user, logout } = useAuth();
@@ -21,7 +22,7 @@ export default function Profile() {
   const [semester, setSemester] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [earnedBadges, setEarnedBadges] = useState<Badge[]>([]);
 
   // -------- LOAD PROFILE --------
   useEffect(() => {
@@ -35,6 +36,26 @@ export default function Profile() {
         setCollege(data.college || "");
         setSemester(data.semester || "");
       }
+      
+      // Calculate Badges (Simple implementation)
+      // In production, these stats should be aggregated in the user document
+      const playlistsSnap = await getDocs(collection(db, "users", user.uid, "playlists"));
+      let watchedLectures = 0;
+      let totalMinutes = 0;
+      playlistsSnap.forEach(p => {
+        const lectures = p.data().lectures || [];
+        watchedLectures += lectures.filter((l: any) => l.completed).length;
+        totalMinutes += lectures.reduce((acc: number, l: any) => acc + (l.watchTime || 0), 0);
+      });
+
+      const goalsSnap = await getDocs(collection(db, "users", user.uid, "goals"));
+      // Assume a goal is complete if subGoals exist and all are checked
+      const completedGoals = goalsSnap.docs.filter(g => {
+        const sg = g.data().subGoals || [];
+        return sg.length > 0 && sg.every((s: any) => s.completed);
+      }).length;
+
+      setEarnedBadges(getEarnedBadges({ watchedLectures, totalMinutes, completedGoals }));
       setLoading(false);
     };
 
@@ -69,8 +90,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* HEADER */}
+    <div className="min-h-screen bg-background pb-10">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-2">
@@ -89,9 +109,8 @@ export default function Profile() {
         </div>
       </header>
 
-      {/* CONTENT */}
-      <main className="container mx-auto px-4 py-10 max-w-xl">
-        <Card className="shadow-xl">
+      <main className="container mx-auto px-4 py-10 max-w-4xl grid md:grid-cols-2 gap-8">
+        <Card className="shadow-xl h-fit">
           <CardHeader className="text-center">
             <div className="relative w-fit mx-auto mb-3">
               <Avatar className="h-20 w-20">
@@ -100,40 +119,12 @@ export default function Profile() {
                   {user?.email?.[0]?.toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
-              <label className="absolute bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer shadow">
-                <Camera className="h-4 w-4" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    if (!user || !e.target.files?.[0]) return;
-                    setUploading(true);
-
-                    const file = e.target.files[0];
-                    const { getStorage, ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
-                    const { updateProfile } = await import("firebase/auth");
-
-                    const storage = getStorage();
-                    const imgRef = ref(storage, `avatars/${user.uid}`);
-                    await uploadBytes(imgRef, file);
-                    const url = await getDownloadURL(imgRef);
-
-                    await updateProfile(user, { photoURL: url });
-                    await setDoc(doc(db, "users", user.uid), { photoURL: url }, { merge: true });
-
-                    setUploading(false);
-                    window.location.reload();
-                  }}
-                />
-              </label>
             </div>
             <CardTitle>{user?.email}</CardTitle>
             <CardDescription>Manage your academic profile</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* College */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <School className="h-4 w-4" /> College
@@ -145,7 +136,6 @@ export default function Profile() {
               />
             </div>
 
-            {/* Semester */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <GraduationCap className="h-4 w-4" /> Semester
@@ -162,7 +152,6 @@ export default function Profile() {
               </select>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-4">
               <Button className="flex-1" onClick={saveProfile} disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />
@@ -179,6 +168,31 @@ export default function Profile() {
                 <LogOut className="h-4 w-4 mr-2" /> Logout
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* BADGES SECTION */}
+        <Card className="shadow-xl h-fit">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Medal className="h-5 w-5 text-yellow-500" /> Achievements
+            </CardTitle>
+            <CardDescription>Badges you've earned</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {earnedBadges.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Keep studying to earn your first badge!</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {earnedBadges.map(badge => (
+                  <div key={badge.id} className="flex flex-col items-center p-3 bg-muted/50 rounded-xl border-2 hover:border-primary/20 transition-colors text-center">
+                    <div className="text-3xl mb-2">{badge.icon}</div>
+                    <p className="font-bold text-sm">{badge.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{badge.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
