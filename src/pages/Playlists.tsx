@@ -54,11 +54,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -66,7 +61,6 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Avatar,
@@ -78,7 +72,6 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  Bell,
   Settings,
   PlayCircle,
   Check,
@@ -89,8 +82,6 @@ import {
   Sparkles,
   Search,
   Filter,
-  Clock,
-  BarChart3,
   Timer,
   Play,
   Pause,
@@ -98,23 +89,15 @@ import {
   X,
   ArrowUp,
   ArrowDown,
-  GripVertical,
-  Bookmark,
   Copy,
   Download,
   Upload,
-  Gauge,
   FileText,
   Archive,
   Calendar,
   HelpCircle,
-  MoreVertical,
-  CheckSquare,
-  Square,
-  FileJson,
-  Hash,
-  Type,
-  History,
+  BarChart3,
+  Bookmark,
 } from "lucide-react";
 
 /* ================= TYPES ================= */
@@ -179,7 +162,8 @@ function extractVideoId(url: string): string | null {
   } catch { }
   return null;
 }
-/* ===== PATCH 9: NOTES SANITIZER ===== */
+
+/* ===== NOTES SANITIZER ===== */
 function sanitizeNotes(input: string): string {
   return input
     // remove zero-width & invisible chars
@@ -189,8 +173,8 @@ function sanitizeNotes(input: string): string {
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
 
-    // remove control characters except newline & tab
-    .replace(/[^\p{L}\p{N}\p{P}\p{S}\p{Z}\n\t]/gu, "")
+    // Allow Letters, Numbers, Punctuation, Symbols (Math), Separators, Newlines, Tabs AND Symbol Other (Emojis)
+    .replace(/[^\p{L}\p{N}\p{P}\p{S}\p{Z}\p{So}\n\t]/gu, "")
 
     // limit repeated symbols
     .replace(/([*_=~`]){4,}/g, "$1$1$1")
@@ -221,7 +205,6 @@ export default function Playlists() {
   /* ===== PATCH: TAG + PDF + AI STATES ===== */
   const [activeTags, setActiveTags] = useState<NoteTag[]>([]);
   const [showMathPad, setShowMathPad] = useState(false);
-  const [aiPreview, setAiPreview] = useState("");
   const [aiError, setAiError] = useState("");
 
   const watchStartRef = useRef<number | null>(null);
@@ -240,15 +223,26 @@ export default function Playlists() {
   const [showFocusTip, setShowFocusTip] = useState(true);
 
   /* ---------- NOTES STATES ---------- */
-  /* ===== PATCH 10: AUTOSAVE STATUS ===== */
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "typing" | "saving" | "saved"
   >("idle");
 
   const isDirtyRef = useRef(false);
-
   const [localNotes, setLocalNotes] = useState("");
   const [aiSummary, setAiSummary] = useState("");
+
+  /* ---------- BUG FIX: REFS FOR CLEANUP SAVING ---------- */
+  const localNotesRef = useRef(localNotes);
+  const activeRef = useRef(active);
+
+  // Keep refs synced
+  useEffect(() => {
+    localNotesRef.current = localNotes;
+  }, [localNotes]);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   /* ---------- NEW FEATURES STATE ---------- */
   const { toast } = useToast();
@@ -281,7 +275,6 @@ export default function Playlists() {
   // Playback & Auto-play
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [autoPlay, setAutoPlay] = useState(false);
-  const youtubePlayerRef = useRef<any>(null);
 
   // Bulk operations
   const [selectedLectures, setSelectedLectures] = useState<Set<string>>(new Set());
@@ -309,10 +302,8 @@ export default function Playlists() {
   const [playlistDescriptionInput, setPlaylistDescriptionInput] = useState("");
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState<{ [key: string]: boolean }>({});
-  const [selectedDueDate, setSelectedDueDate] = useState<Date | undefined>(undefined);
-
+  
   // Global search
-  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
   // Per-playlist stats
@@ -378,19 +369,69 @@ export default function Playlists() {
       .find((p) => p.id === active.pid)
       ?.lectures.find((l) => l.id === active.lid);
 
-  /* ---------- SYNC NOTES ---------- */
+  /* ---------- SYNC NOTES & AUTO-SAVE LOGIC ---------- */
+  
+  // Immediate Save Function
+  const saveNotesImmediate = useCallback(async (lectureId: string, playlistId: string, content: string) => {
+    if (!content.trim() && !isDirtyRef.current) return;
+    
+    // Clear pending timer
+    if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
+
+    try {
+      setPlaylists((currentPlaylists) => {
+        const pIndex = currentPlaylists.findIndex((p) => p.id === playlistId);
+        if (pIndex === -1) return currentPlaylists;
+        
+        const p = currentPlaylists[pIndex];
+        const lIndex = p.lectures.findIndex((l) => l.id === lectureId);
+        if (lIndex === -1) return currentPlaylists;
+        
+        const updatedLectures = [...p.lectures];
+        updatedLectures[lIndex] = { ...updatedLectures[lIndex], notes: sanitizeNotes(content) };
+        const updatedPlaylist = { ...p, lectures: updatedLectures };
+        
+        // Fire and forget update
+        updateDoc(doc(db, "users", user!.uid, "playlists", playlistId), {
+          lectures: updatedLectures
+        }).catch(err => console.error("Autosave error:", err));
+        
+        const newPlaylists = [...currentPlaylists];
+        newPlaylists[pIndex] = updatedPlaylist;
+        return newPlaylists;
+      });
+      
+      setSaveStatus("saved");
+      isDirtyRef.current = false;
+    } catch (e) {
+      console.error(e);
+    }
+  }, [user]);
+
+  // Handle Active Lecture Change (Load new notes, save old ones)
+  useEffect(() => {
+    // Cleanup runs BEFORE the effect body, so we use it to save the *previous* lecture's notes
+    return () => {
+      if (isDirtyRef.current && activeRef.current) {
+        saveNotesImmediate(activeRef.current.lid, activeRef.current.pid, localNotesRef.current);
+      }
+    };
+  }, [active, saveNotesImmediate]); 
+
+  // Load new notes
   useEffect(() => {
     if (!current) {
       setLocalNotes("");
       setAiSummary("");
       setActiveTags([]);
+      isDirtyRef.current = false;
       return;
     }
     setLocalNotes(current.notes || "");
     setAiSummary(current.aiSummary || "");
     setActiveTags(current.tags || []);
+    isDirtyRef.current = false; // Reset dirty flag for new lecture
   }, [current?.id, current?.notes, current?.aiSummary, current?.tags]);
-
 
 
   /* ---------- WATCH TIME (SAFE) ---------- */
@@ -516,42 +557,47 @@ export default function Playlists() {
     }
   };
 
-  const updateNotesDebounced = (text: string) => {
+  const updateNotesDebounced = useCallback((text: string) => {
     setLocalNotes(text);
     setSaveStatus("typing");
     isDirtyRef.current = true;
 
     if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
 
+    // Save logic
     notesSaveTimer.current = setTimeout(async () => {
-      if (!active || !user) {
+      // Use refs to get latest values inside timeout to avoid stale closures
+      const currentActive = activeRef.current;
+      
+      if (!currentActive || !user) {
         setSaveStatus("idle");
         return;
       }
 
       setSaveStatus("saving");
-
+      
       try {
-        const p = playlists.find((p) => p.id === active.pid);
-        if (!p) {
-          setSaveStatus("idle");
-          return;
-        }
+        setPlaylists((currentPlaylists) => {
+          const p = currentPlaylists.find((p) => p.id === currentActive.pid);
+          if (!p) return currentPlaylists;
 
-        const updated = p.lectures.map((l) =>
-          l.id === active.lid
-            ? { ...l, notes: sanitizeNotes(text) }
-            : l
-        );
+          const updated = p.lectures.map((l) =>
+            l.id === currentActive.lid
+              ? { ...l, notes: sanitizeNotes(text) }
+              : l
+          );
 
-        await updateDoc(
-          doc(db, "users", user.uid, "playlists", p.id),
-          { lectures: updated }
-        );
+          // Trigger Firestore update
+          updateDoc(
+            doc(db, "users", user.uid, "playlists", p.id),
+            { lectures: updated }
+          ).catch(e => {
+            console.error("Save error", e);
+            setSaveStatus("idle");
+          });
 
-        setPlaylists((currentPlaylists) =>
-          currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
-        );
+          return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x));
+        });
 
         setSaveStatus("saved");
         isDirtyRef.current = false;
@@ -560,7 +606,7 @@ export default function Playlists() {
         setSaveStatus("idle");
       }
     }, 600);
-  };
+  }, [user]);
 
   const insertSymbol = async (symbol: string) => {
     const textarea = document.getElementById("notes-area") as HTMLTextAreaElement;
@@ -575,38 +621,13 @@ export default function Playlists() {
       localNotes.slice(end);
 
     setLocalNotes(updated);
-    setSaveStatus("saving");
+    updateNotesDebounced(updated);
 
-    try {
-      setPlaylists((currentPlaylists) => {
-        const p = currentPlaylists.find((p) => p.id === active.pid);
-        if (!p) return currentPlaylists;
-
-        const updatedLectures = p.lectures.map((l) =>
-          l.id === active.lid ? { ...l, notes: sanitizeNotes(updated) } : l
-        );
-
-        updateDoc(
-          doc(db, "users", user.uid, "playlists", p.id),
-          { lectures: updatedLectures }
-        ).catch((error) => {
-          console.error("Error saving symbol:", error);
-          setSaveStatus("idle");
-        });
-
-        setSaveStatus("saved");
-        return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x));
-      });
-
-      requestAnimationFrame(() => {
-        textarea.focus();
-        textarea.selectionStart = textarea.selectionEnd =
-          start + symbol.length;
-      });
-    } catch (error) {
-      console.error("Error inserting symbol:", error);
-      setSaveStatus("idle");
-    }
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd =
+        start + symbol.length;
+    });
   };
 
 
@@ -633,7 +654,6 @@ export default function Playlists() {
   };
 
   /* ===== PATCH: TAG LOGIC ===== */
-  /* ===== PATCH 7: TAG TOGGLE (SAFE) ===== */
   const toggleTag = async (tag: NoteTag) => {
     if (!active || !user) return;
 
@@ -2055,7 +2075,7 @@ export default function Playlists() {
             )}
 
             {/* PLAYER + NOTES */}
-            <div className={`${theatre ? "fixed inset-0 z-50 bg-black p-4 md:p-8" : "sticky top-24"}`}>
+            <div className={`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-24"}`}>
               <Card className={`shadow-2xl border-2 ${theatre ? "h-full flex flex-col" : ""}`}>
                 {current ? (
                   <>

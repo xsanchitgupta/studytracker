@@ -21,7 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   ArrowLeft, Plus, Trash2, Brain, 
   Layers, CheckCircle2, XCircle, 
-  Play
+  Play, Eye, Keyboard
 } from "lucide-react";
 
 // Charts
@@ -129,7 +129,6 @@ export default function Flashcards() {
 
   // --- RENDER STUDY MODE ---
   if (isStudyMode) {
-    // PASS A COPY of the relevant cards to prevent real-time shifting issues
     const studySet = activeDeckId === "all" ? cards : cards.filter(c => c.deckId === activeDeckId);
     
     return (
@@ -338,17 +337,14 @@ export default function Flashcards() {
 /* ================= STUDY SESSION COMPONENT ================= */
 
 function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashcard[], onExit: () => void, userUid?: string }) {
-  // CRITICAL FIX: Initialize the queue ONCE using useState instead of deriving it from props.
-  // This prevents the queue from shifting under the user's feet when Firestore updates the `cards` prop.
   const [sessionQueue] = useState(() => {
     const now = Date.now();
     const due = initialCards.filter(c => c.srs.nextReview <= now).sort((a, b) => a.srs.nextReview - b.srs.nextReview);
-    // If fewer than 5 due cards, mix in some random review cards to make it a worthwhile session (up to 10 total)
     if (due.length < 5) {
         const notDue = initialCards.filter(c => c.srs.nextReview > now).sort(() => 0.5 - Math.random());
         return [...due, ...notDue.slice(0, 10 - due.length)];
     }
-    return due.slice(0, 20); // Cap at 20 per session for sanity
+    return due.slice(0, 20); 
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -364,7 +360,7 @@ function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashca
     // 1. Calculate new SRS data
     const newSRS = calculateNextReview(currentCard.srs, rating);
 
-    // 2. Update Firestore (Background update, won't affect current `sessionQueue` because we used useState)
+    // 2. Update Firestore
     await updateDoc(doc(db, "users", userUid, "flashcards", currentCard.id), {
       srs: newSRS
     });
@@ -381,7 +377,6 @@ function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashca
     setCurrentIndex(p => p + 1);
   };
 
-  // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isFinished) return;
@@ -391,7 +386,7 @@ function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashca
         if (!isFlipped) setIsFlipped(true);
       }
       
-      if (!isFlipped) return;
+      if (!isFlipped) return; // Prevent rating if card is not flipped
 
       switch(e.key) {
         case "1": handleRate("again"); break;
@@ -452,23 +447,42 @@ function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashca
         </div>
       </div>
 
-      {/* The Card */}
+      {/* The Card Container */}
       <div className="relative w-full max-w-2xl aspect-[3/2] perspective-1000 group">
         <div 
-          className={`relative w-full h-full transition-all duration-500 transform-style-3d cursor-pointer ${isFlipped ? "rotate-y-180" : ""}`}
+          className="relative w-full h-full transition-transform duration-500 cursor-pointer"
+          style={{ 
+            transformStyle: 'preserve-3d',
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+          }}
           onClick={() => !isFlipped && setIsFlipped(true)}
         >
-          {/* FRONT */}
-          <Card className="absolute inset-0 backface-hidden flex flex-col items-center justify-center p-8 md:p-12 border-none shadow-2xl bg-white dark:bg-zinc-900 text-center">
+          {/* FRONT (Question) */}
+          <Card 
+            className="absolute inset-0 flex flex-col items-center justify-center p-8 md:p-12 border-none shadow-2xl bg-white dark:bg-zinc-900 text-center"
+            style={{ backfaceVisibility: 'hidden' }}
+          >
             <span className="absolute top-6 left-6 text-xs font-bold tracking-widest text-muted-foreground uppercase">Question</span>
-            <div className="prose dark:prose-invert prose-lg max-w-none">
+            <div className="prose dark:prose-invert prose-lg max-w-none select-none">
               <ReactMarkdown>{currentCard.front}</ReactMarkdown>
             </div>
-            <p className="absolute bottom-6 text-xs text-muted-foreground animate-pulse">Press Space to flip</p>
+            
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-pulse">
+               <span className="text-xs text-muted-foreground">Tap or Press Space to Flip</span>
+               <Button size="sm" variant="secondary" className="rounded-full gap-2">
+                 <Eye className="h-4 w-4" /> Show Answer
+               </Button>
+            </div>
           </Card>
 
-          {/* BACK */}
-          <Card className="absolute inset-0 backface-hidden rotate-y-180 flex flex-col items-center justify-center p-8 md:p-12 border-none shadow-2xl bg-white dark:bg-zinc-900 text-center">
+          {/* BACK (Answer) */}
+          <Card 
+            className="absolute inset-0 flex flex-col items-center justify-center p-8 md:p-12 border-none shadow-2xl bg-white dark:bg-zinc-900 text-center"
+            style={{ 
+              backfaceVisibility: 'hidden',
+              transform: 'rotateY(180deg)' // Essential: flips content so it's readable when wrapper is 180deg
+            }}
+          >
             <span className="absolute top-6 left-6 text-xs font-bold tracking-widest text-muted-foreground uppercase">Answer</span>
             <div className="prose dark:prose-invert prose-lg max-w-none">
               <ReactMarkdown>{currentCard.back}</ReactMarkdown>
@@ -477,21 +491,47 @@ function StudySession({ initialCards, onExit, userUid }: { initialCards: Flashca
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Controls - ONLY VISIBLE IF FLIPPED */}
       <div className={`mt-8 transition-all duration-300 ${isFlipped ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}`}>
-        <div className="flex gap-4">
-            <Button size="lg" variant="secondary" className="w-24 border-2 border-red-500/50 hover:bg-red-500/20 hover:border-red-500 text-red-500" onClick={() => handleRate("again")}>
-              Again
-            </Button>
-            <Button size="lg" variant="secondary" className="w-24 border-2 border-yellow-500/50 hover:bg-yellow-500/20 hover:border-yellow-500 text-yellow-500" onClick={() => handleRate("hard")}>
-              Hard
-            </Button>
-            <Button size="lg" variant="secondary" className="w-24 border-2 border-blue-500/50 hover:bg-blue-500/20 hover:border-blue-500 text-blue-500" onClick={() => handleRate("good")}>
-              Good
-            </Button>
-            <Button size="lg" variant="secondary" className="w-24 border-2 border-green-500/50 hover:bg-green-500/20 hover:border-green-500 text-green-500" onClick={() => handleRate("easy")}>
-              Easy
-            </Button>
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex gap-4">
+            <div className="flex flex-col items-center gap-1">
+              <Button size="lg" variant="secondary" className="w-24 h-24 rounded-2xl flex flex-col gap-2 border-2 border-red-500/50 hover:bg-red-500/20 hover:border-red-500 text-red-500 transition-all hover:scale-105" onClick={() => handleRate("again")}>
+                <span className="text-2xl">RE</span>
+                <span className="text-sm font-bold">Again</span>
+              </Button>
+              <kbd className="text-[10px] text-white/30 font-mono border border-white/20 px-1.5 py-0.5 rounded">1</kbd>
+            </div>
+            
+            <div className="flex flex-col items-center gap-1">
+              <Button size="lg" variant="secondary" className="w-24 h-24 rounded-2xl flex flex-col gap-2 border-2 border-yellow-500/50 hover:bg-yellow-500/20 hover:border-yellow-500 text-yellow-500 transition-all hover:scale-105" onClick={() => handleRate("hard")}>
+                <span className="text-2xl">😬</span>
+                <span className="text-sm font-bold">Hard</span>
+              </Button>
+              <kbd className="text-[10px] text-white/30 font-mono border border-white/20 px-1.5 py-0.5 rounded">2</kbd>
+            </div>
+
+            <div className="flex flex-col items-center gap-1">
+              <Button size="lg" variant="secondary" className="w-24 h-24 rounded-2xl flex flex-col gap-2 border-2 border-blue-500/50 hover:bg-blue-500/20 hover:border-blue-500 text-blue-500 transition-all hover:scale-105" onClick={() => handleRate("good")}>
+                <span className="text-2xl">👍</span>
+                <span className="text-sm font-bold">Good</span>
+              </Button>
+              <kbd className="text-[10px] text-white/30 font-mono border border-white/20 px-1.5 py-0.5 rounded">3</kbd>
+            </div>
+
+            <div className="flex flex-col items-center gap-1">
+              <Button size="lg" variant="secondary" className="w-24 h-24 rounded-2xl flex flex-col gap-2 border-2 border-green-500/50 hover:bg-green-500/20 hover:border-green-500 text-green-500 transition-all hover:scale-105" onClick={() => handleRate("easy")}>
+                <span className="text-2xl">⚡</span>
+                <span className="text-sm font-bold">Easy</span>
+              </Button>
+              <kbd className="text-[10px] text-white/30 font-mono border border-white/20 px-1.5 py-0.5 rounded">4</kbd>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 text-white/40 text-xs">
+            <Keyboard className="h-3 w-3" />
+            <span>Use keyboard shortcuts</span>
+          </div>
         </div>
       </div>
     </div>
