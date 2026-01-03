@@ -3,14 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { calculateNextReview, INITIAL_CARD_DATA, SRSCardData, SRSRating } from "@/lib/srs";
 import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 // UI Components
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -21,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   ArrowLeft, Plus, Trash2, Brain, 
   Layers, CheckCircle2, XCircle, 
-  Play, Eye, Keyboard
+  Play, Eye, Keyboard, Sparkles, Zap, Trophy, Search
 } from "lucide-react";
 
 // Charts
@@ -58,9 +61,12 @@ export default function Flashcards() {
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [decks, setDecks] = useState<Deck[]>(DEFAULT_DECKS);
   
+  const { theme } = useTheme();
+  
   // UI State
   const [activeDeckId, setActiveDeckId] = useState<string>("all");
   const [isStudyMode, setIsStudyMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Creation State
   const [newCardFront, setNewCardFront] = useState("");
@@ -91,24 +97,41 @@ export default function Flashcards() {
 
   // --- ACTIONS ---
   const addCard = async () => {
-    if (!user || !newCardFront.trim() || !newCardBack.trim()) return;
+    if (!user || !newCardFront.trim() || !newCardBack.trim()) {
+      toast.error("Please fill in both front and back of the card");
+      return;
+    }
     
-    await addDoc(collection(db, "users", user.uid, "flashcards"), { 
-      front: newCardFront, 
-      back: newCardBack,
-      deckId: newCardDeck,
-      srs: INITIAL_CARD_DATA,
-      createdAt: Date.now()
-    });
-    
-    setNewCardFront("");
-    setNewCardBack("");
-    setIsDialogOpen(false);
+    try {
+      await addDoc(collection(db, "users", user.uid, "flashcards"), { 
+        front: newCardFront, 
+        back: newCardBack,
+        deckId: newCardDeck,
+        srs: INITIAL_CARD_DATA,
+        createdAt: Date.now()
+      });
+      
+      setNewCardFront("");
+      setNewCardBack("");
+      setIsDialogOpen(false);
+      toast.success("Flashcard created!");
+    } catch (error) {
+      console.error("Error creating card:", error);
+      toast.error("Failed to create flashcard");
+    }
   };
 
   const deleteCard = async (id: string) => {
     if (!user) return;
-    await deleteDoc(doc(db, "users", user.uid, "flashcards", id));
+    if (!confirm("Are you sure you want to delete this card?")) return;
+    
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "flashcards", id));
+      toast.success("Card deleted");
+    } catch (error) {
+      console.error("Error deleting card:", error);
+      toast.error("Failed to delete card");
+    }
   };
 
   // --- STATISTICS ---
@@ -127,6 +150,18 @@ export default function Flashcards() {
     return { total, due, learning, mastered, retentionData };
   }, [cards]);
 
+  const filteredCards = useMemo(() => {
+    let filtered = cards.filter(c => activeDeckId === "all" || c.deckId === activeDeckId);
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.front.toLowerCase().includes(query) || 
+        c.back.toLowerCase().includes(query)
+      );
+    }
+    return filtered;
+  }, [cards, activeDeckId, searchQuery]);
+
   // --- RENDER STUDY MODE ---
   if (isStudyMode) {
     const studySet = activeDeckId === "all" ? cards : cards.filter(c => c.deckId === activeDeckId);
@@ -142,39 +177,60 @@ export default function Flashcards() {
 
   // --- RENDER DASHBOARD ---
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className={cn("min-h-screen transition-colors duration-300 pb-10",
+      theme === "dark" 
+        ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
+        : "bg-gradient-to-br from-background via-background to-muted/20"
+    )}>
       {/* HEADER */}
-      <header className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Brain className="h-8 w-8 text-primary" /> Flashcards
-            </h1>
-            <p className="text-muted-foreground">Spaced Repetition System • {stats.due} cards due today</p>
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+        theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
+      )}>
+        <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-3">
+              <div className={cn("p-2 rounded-xl transition-all duration-300",
+                theme === "dark" ? "bg-primary/20" : "bg-primary/10"
+              )}>
+                <Brain className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h1 className={cn("text-2xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                  Flashcards
+                </h1>
+                <p className="text-xs text-muted-foreground">Spaced Repetition System • {stats.due} cards due today</p>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="flex gap-3">
-          <Button 
-            size="lg" 
-            className="shadow-lg shadow-primary/20"
-            onClick={() => setIsStudyMode(true)}
-            disabled={cards.length === 0}
-          >
-            <Play className="h-4 w-4 mr-2" /> Study Now
-          </Button>
-          
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="lg"><Plus className="h-4 w-4 mr-2" /> New Card</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Create Flashcard</DialogTitle>
-              </DialogHeader>
+          <div className="flex gap-3">
+            <Button 
+              size="lg" 
+              className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-lg shadow-primary/20"
+              onClick={() => setIsStudyMode(true)}
+              disabled={cards.length === 0}
+            >
+              <Play className="h-4 w-4 mr-2" /> Study Now
+            </Button>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="lg" className="border-2">
+                  <Plus className="h-4 w-4 mr-2" /> New Card
+                </Button>
+              </DialogTrigger>
+              <DialogContent className={cn("sm:max-w-[600px]",
+                theme === "dark" ? "bg-background/95 border-white/10" : "bg-background border-border"
+              )}>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    Create Flashcard
+                  </DialogTitle>
+                </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -213,19 +269,27 @@ export default function Flashcards() {
                 
                 <Button onClick={addCard} className="w-full">Save Card</Button>
               </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT: Stats & Decks */}
-        <div className="space-y-6">
-          {/* STATS CARD */}
-          <Card className="border-2 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Retention Overview</CardTitle>
-            </CardHeader>
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* LEFT: Stats & Decks */}
+          <div className="space-y-6">
+            {/* STATS CARD */}
+            <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-primary" />
+                  Retention Overview
+                </CardTitle>
+                <CardDescription>Your flashcard mastery levels</CardDescription>
+              </CardHeader>
             <CardContent>
               <div className="h-[180px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -254,80 +318,138 @@ export default function Flashcards() {
             </CardContent>
           </Card>
 
-          {/* DECKS LIST */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">Your Decks</h3>
-            <button 
-              onClick={() => setActiveDeckId("all")}
-              className={`w-full flex items-center justify-between p-3 rounded-lg text-sm font-medium transition-all ${activeDeckId === "all" ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-muted"}`}
-            >
-              <span className="flex items-center gap-2"><Layers className="h-4 w-4" /> All Cards</span>
-              <Badge variant="secondary" className="bg-background/20 hover:bg-background/30 text-current">{cards.length}</Badge>
-            </button>
-            {decks.map(deck => {
-              const count = cards.filter(c => c.deckId === deck.id).length;
-              return (
+            {/* DECKS LIST */}
+            <Card className={cn("backdrop-blur-xl border",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  Your Decks
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
                 <button 
-                  key={deck.id}
-                  onClick={() => setActiveDeckId(deck.id)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg text-sm font-medium transition-all ${activeDeckId === deck.id ? "bg-muted ring-2 ring-primary" : "hover:bg-muted"}`}
+                  onClick={() => setActiveDeckId("all")}
+                  className={cn("w-full flex items-center justify-between p-3 rounded-lg text-sm font-medium transition-all",
+                    activeDeckId === "all" 
+                      ? "bg-primary text-primary-foreground shadow-md" 
+                      : theme === "dark" ? "hover:bg-white/5" : "hover:bg-muted"
+                  )}
                 >
-                  <span className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${deck.color}`} />
-                    {deck.name}
-                  </span>
-                  <Badge variant="outline">{count}</Badge>
+                  <span className="flex items-center gap-2"><Layers className="h-4 w-4" /> All Cards</span>
+                  <Badge variant="secondary" className="bg-background/20 hover:bg-background/30 text-current">{cards.length}</Badge>
                 </button>
-              );
-            })}
+                {decks.map(deck => {
+                  const count = cards.filter(c => c.deckId === deck.id).length;
+                  return (
+                    <button 
+                      key={deck.id}
+                      onClick={() => setActiveDeckId(deck.id)}
+                      className={cn("w-full flex items-center justify-between p-3 rounded-lg text-sm font-medium transition-all",
+                        activeDeckId === deck.id 
+                          ? "bg-primary/20 ring-2 ring-primary" 
+                          : theme === "dark" ? "hover:bg-white/5" : "hover:bg-muted"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <div className={cn(`w-3 h-3 rounded-full ${deck.color}`)} />
+                        {deck.name}
+                      </span>
+                      <Badge variant="outline">{count}</Badge>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
           </div>
-        </div>
 
-        {/* RIGHT: Card Grid */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">
-              {activeDeckId === "all" ? "All Cards" : decks.find(d => d.id === activeDeckId)?.name}
-            </h2>
-            <div className="flex gap-2">
-              <Input placeholder="Search cards..." className="h-8 w-[200px]" />
+          {/* RIGHT: Card Grid */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className={cn("text-xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                {activeDeckId === "all" ? "All Cards" : decks.find(d => d.id === activeDeckId)?.name}
+                {searchQuery && ` (${filteredCards.length} found)`}
+              </h2>
+              <div className="flex gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search cards..." 
+                    className="h-9 w-[200px] pl-8" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cards
-              .filter(c => activeDeckId === "all" || c.deckId === activeDeckId)
-              .map(card => (
-              <Card key={card.id} className="group hover:shadow-md transition-shadow">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                      Next: {new Date(card.srs.nextReview).toLocaleDateString()}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredCards.map((card, index) => (
+                <Card 
+                  key={card.id} 
+                  className={cn("group backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02]",
+                    theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
+                    `animate-in fade-in slide-in-from-bottom-${Math.min(index % 5 + 1, 5)}`
+                  )}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <Badge variant="secondary" className="text-xs">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Next: {new Date(card.srs.nextReview).toLocaleDateString()}
+                      </Badge>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10" 
+                        onClick={() => deleteCard(card.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteCard(card.id)}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
-                  </div>
-                  
-                  <div className="prose prose-sm dark:prose-invert max-w-none line-clamp-2">
-                    <ReactMarkdown>{card.front}</ReactMarkdown>
-                  </div>
-                  <Separator />
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground line-clamp-2">
-                    <ReactMarkdown>{card.back}</ReactMarkdown>
-                  </div>
+                    
+                    <div className={cn("prose prose-sm dark:prose-invert max-w-none line-clamp-2",
+                      theme === "dark" ? "text-white" : "text-foreground"
+                    )}>
+                      <ReactMarkdown>{card.front}</ReactMarkdown>
+                    </div>
+                    <Separator />
+                    <div className={cn("prose prose-sm dark:prose-invert max-w-none text-muted-foreground line-clamp-2")}>
+                      <ReactMarkdown>{card.back}</ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {filteredCards.length === 0 && cards.length > 0 && (
+              <Card className={cn("backdrop-blur-xl border text-center py-12",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardContent>
+                  <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-lg font-medium">No cards found</p>
+                  <p className="text-sm text-muted-foreground">Try adjusting your search or deck filter</p>
                 </CardContent>
               </Card>
-            ))}
+            )}
+            {cards.length === 0 && (
+              <Card className={cn("backdrop-blur-xl border text-center py-12",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardContent>
+                  <Brain className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-lg font-medium mb-2">No cards yet</p>
+                  <p className="text-sm text-muted-foreground mb-4">Create your first card to start learning</p>
+                  <Button onClick={() => setIsDialogOpen(true)} className="bg-gradient-to-r from-primary to-purple-600">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Card
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
-          {cards.length === 0 && (
-            <div className="text-center py-12 border-2 border-dashed rounded-xl">
-              <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No cards yet</p>
-              <p className="text-sm text-muted-foreground mb-4">Create your first card to start learning</p>
-              <Button onClick={() => setIsDialogOpen(true)}>Create Card</Button>
-            </div>
-          )}
         </div>
       </main>
     </div>

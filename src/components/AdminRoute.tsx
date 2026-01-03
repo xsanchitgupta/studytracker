@@ -2,10 +2,8 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ReactNode } from "react";
 
-const ADMIN_EMAIL = "admin@studytrack.edu";
-
 export function AdminRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   // 🔹 WAIT until Firebase resolves auth state
   if (loading) {
@@ -17,7 +15,8 @@ export function AdminRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/auth" replace />;
   }
 
-  if (user.email !== ADMIN_EMAIL) {
+  // Check role from profile (stored in Firebase)
+  if (!profile || profile.role !== "admin") {
     return <Navigate to="/dashboard" replace />;
   }
 
