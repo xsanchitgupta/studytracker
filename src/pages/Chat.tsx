@@ -9,10 +9,7 @@ import {
   doc, 
   updateDoc, 
   deleteDoc,
-  setDoc,
-  getDoc,
-  arrayUnion,
-  arrayRemove
+  getDoc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -23,20 +20,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Progress } from "@/components/ui/progress";
 import { 
-  Menu, Search, Settings, Bell, Send, Hash, 
+  Menu, Search, Settings, Send, Hash, 
   MessageSquare, Image as ImageIcon, Smile, 
-  MoreVertical, X, Phone, Video, Paperclip,
-  Trash2, Edit2, Reply, Check, CheckCheck, Loader2,
-  Users, ChevronRight, Mic, StopCircle, Pin, FileText,
-  BarChart2, Download, Play, Pause
+  MoreVertical, X, Paperclip,
+  Trash2, Edit2, Reply, Check, Loader2,
+  Users, Mic, StopCircle, Pin, FileText,
+  BarChart2, Play
 } from "lucide-react";
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
   DropdownMenuTrigger, DropdownMenuSeparator 
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { format, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
@@ -57,7 +53,7 @@ interface ChatSession {
 interface PollOption {
   id: number;
   text: string;
-  votes: string[]; // array of userIds
+  votes: string[];
 }
 
 interface Message {
@@ -66,18 +62,18 @@ interface Message {
   senderId: string;
   senderName: string;
   senderPhoto?: string;
+  senderEmail?: string; // Added for fallback
   createdAt: any;
   imageUrl?: string;
-  fileUrl?: string; // For PDFs/Docs
+  fileUrl?: string;
   fileName?: string;
-  audioUrl?: string; // For Voice Notes
+  audioUrl?: string;
   type: "text" | "image" | "file" | "audio" | "poll";
   pollData?: {
     question: string;
     options: PollOption[];
     allowMultiple: boolean;
   };
-  reactions?: Record<string, string[]>;
   replyTo?: { id: string; name: string; text: string };
   edited?: boolean;
   pinned?: boolean;
@@ -86,18 +82,42 @@ interface Message {
 interface UserStatus {
   uid: string;
   name: string;
+  email: string;
   photoURL?: string;
   status: "online" | "offline";
   lastSeen?: any;
+  color?: string; // For avatar fallback
 }
 
-// --- Constants ---
+// --- Constants & Helpers ---
 const CHANNELS: ChatSession[] = [
   { id: "channel_general", type: "channel", name: "General Lounge", description: "Chill vibes & general talk" },
   { id: "channel_homework", type: "channel", name: "Homework Help", description: "Get help with assignments" },
   { id: "channel_resources", type: "channel", name: "Resources", description: "Share notes & PDFs" },
   { id: "channel_exams", type: "channel", name: "Exam Prep", description: "Grind time 📚" },
 ];
+
+// Generate consistent colors for users without photos
+const getUserColor = (uid: string) => {
+  const colors = [
+    "bg-red-500", "bg-orange-500", "bg-amber-500", "bg-green-500", 
+    "bg-emerald-500", "bg-teal-500", "bg-cyan-500", "bg-blue-500", 
+    "bg-indigo-500", "bg-violet-500", "bg-purple-500", "bg-fuchsia-500", 
+    "bg-pink-500", "bg-rose-500"
+  ];
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) hash = uid.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const getInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map(n => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+};
 
 export default function Chat() {
   const { user, profile } = useAuth();
@@ -134,7 +154,7 @@ export default function Chat() {
 
   // --- Effects ---
 
-  // 1. Fetch Users
+  // 1. Fetch Users (With Fixes for Name/Photo)
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
@@ -142,15 +162,25 @@ export default function Chat() {
         .map(d => {
           const data = d.data();
           const isOnline = (data.lastSignInAt?.toMillis() || 0) > (data.lastSignOutAt?.toMillis() || 0);
+          
+          // FIX: Use Email prefix if name is missing or "User"
+          let displayName = data.name;
+          if (!displayName || displayName === "User") {
+             displayName = data.email?.split("@")[0] || "Anonymous";
+          }
+
           return {
             uid: d.id,
-            name: data.name || "User",
+            name: displayName,
+            email: data.email,
             photoURL: data.photoURL,
             status: isOnline ? "online" : "offline",
-            lastSeen: data.lastSignInAt
+            lastSeen: data.lastSignInAt,
+            color: getUserColor(d.id) // Assign color
           } as UserStatus;
         })
         .filter(u => u.uid !== user.uid);
+        
       setDmUsers(users);
       setChannelMembers(users);
     });
@@ -163,11 +193,14 @@ export default function Chat() {
     const q = query(collection(db, "chats", activeChat.id, "messages"), orderBy("createdAt", "asc"));
 
     const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
+      const msgs = snap.docs.map(d => {
+        const data = d.data();
+        // FIX: Also fix names in old messages dynamically if possible, or just use what's stored
+        // Ideally, we store senderName correctly on send.
+        return { id: d.id, ...data } as Message;
+      });
       setMessages(msgs);
       setPinnedMessages(msgs.filter(m => m.pinned));
-      
-      // Auto-scroll logic (only if near bottom)
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
 
@@ -201,7 +234,7 @@ export default function Chat() {
     }
   }, [searchQuery, messages]);
 
-  // --- Core Actions ---
+  // --- Actions ---
 
   const handleSendMessage = async (
     customText?: string, 
@@ -210,19 +243,24 @@ export default function Chat() {
   ) => {
     if (!user) return;
     const textContent = customText !== undefined ? customText : text;
-    
-    // Don't send empty text messages
     if (type === "text" && !textContent.trim()) return;
 
     if (type === "text") setText(""); 
     setReplyingTo(null);
 
+    // FIX: Calculate correct display name for sender BEFORE sending
+    let myName = profile?.name;
+    if (!myName || myName === "User") {
+        myName = user.email?.split("@")[0] || "Me";
+    }
+
     try {
       await addDoc(collection(db, "chats", activeChat.id, "messages"), {
         text: textContent,
         senderId: user.uid,
-        senderName: profile?.name || user.email,
+        senderName: myName,
         senderPhoto: profile?.photoURL || "",
+        senderEmail: user.email,
         createdAt: serverTimestamp(),
         type,
         replyTo: replyingTo ? { id: replyingTo.id, name: replyingTo.senderName, text: replyingTo.text } : null,
@@ -235,28 +273,23 @@ export default function Chat() {
     }
   };
 
-  // --- Voice Notes ---
+  // Voice Note Handlers
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         await uploadFile(audioBlob, "audio");
         stream.getTracks().forEach(track => track.stop());
       };
-
       mediaRecorder.start();
       setIsRecording(true);
     } catch (err) {
-      toast.error("Could not access microphone");
+      toast.error("Microphone access denied");
     }
   };
 
@@ -267,27 +300,20 @@ export default function Chat() {
     }
   };
 
-  // --- File Uploads ---
+  // File Upload
   const uploadFile = async (file: Blob | File, type: "image" | "file" | "audio") => {
     if (!user) return;
     setIsUploading(true);
     const fileName = (file as File).name || `recording_${Date.now()}.webm`;
-    
     try {
       const storageRef = ref(storage, `chat/${activeChat.id}/${Date.now()}_${fileName}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      
       const payload: any = {};
       if (type === "image") payload.imageUrl = url;
       if (type === "file") { payload.fileUrl = url; payload.fileName = fileName; }
       if (type === "audio") payload.audioUrl = url;
-
-      await handleSendMessage(
-        type === "audio" ? "Voice Note" : type === "file" ? "Shared a file" : "Shared an image",
-        type,
-        payload
-      );
+      await handleSendMessage(type === "audio" ? "Voice Note" : type === "file" ? "Shared a file" : "Shared an image", type, payload);
     } catch (err) {
       toast.error("Upload failed");
     } finally {
@@ -298,71 +324,54 @@ export default function Chat() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
-    if (file.type.startsWith("image/")) {
-      uploadFile(file, "image");
-    } else {
-      uploadFile(file, "file");
-    }
+    if (file.type.startsWith("image/")) uploadFile(file, "image");
+    else uploadFile(file, "file");
   };
 
-  // --- Polls ---
+  // Polls
   const createPoll = async () => {
     if (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) {
-      toast.error("Poll needs a question and at least 2 options");
+      toast.error("Poll needs a question and 2+ options");
       return;
     }
-    
-    const formattedOptions = pollOptions
-      .filter(o => o.trim())
-      .map((text, index) => ({ id: index, text, votes: [] }));
-
-    await handleSendMessage("Poll", "poll", {
-      pollData: {
-        question: pollQuestion,
-        options: formattedOptions,
-        allowMultiple: false
-      }
-    });
-
-    setPollDialogOpen(false);
-    setPollQuestion("");
-    setPollOptions(["", ""]);
+    const formattedOptions = pollOptions.filter(o => o.trim()).map((text, index) => ({ id: index, text, votes: [] }));
+    await handleSendMessage("Poll", "poll", { pollData: { question: pollQuestion, options: formattedOptions, allowMultiple: false } });
+    setPollDialogOpen(false); setPollQuestion(""); setPollOptions(["", ""]);
   };
 
   const votePoll = async (msgId: string, optionId: number, currentVotes: string[]) => {
     if (!user) return;
     const msgRef = doc(db, "chats", activeChat.id, "messages", msgId);
-    
-    // Simplistic toggle logic for single choice
     const msgDoc = await getDoc(msgRef);
     const msgData = msgDoc.data() as Message;
-    
     if (!msgData.pollData) return;
-
     const newOptions = msgData.pollData.options.map(opt => {
         if (opt.id === optionId) {
-            // Toggle vote
             if (opt.votes.includes(user.uid)) return { ...opt, votes: opt.votes.filter(v => v !== user.uid) };
             return { ...opt, votes: [...opt.votes, user.uid] };
         } else {
-            // Remove vote from others if single choice
             return { ...opt, votes: opt.votes.filter(v => v !== user.uid) };
         }
     });
-
     await updateDoc(msgRef, { "pollData.options": newOptions });
   };
 
-  // --- Reactions & Pinning ---
   const togglePin = async (msg: Message) => {
-    await updateDoc(doc(db, "chats", activeChat.id, "messages", msg.id), {
-        pinned: !msg.pinned
-    });
+    await updateDoc(doc(db, "chats", activeChat.id, "messages", msg.id), { pinned: !msg.pinned });
     toast.success(msg.pinned ? "Message unpinned" : "Message pinned");
   };
 
-  // --- Render Components ---
+  // --- Sub-Components ---
+  
+  // Custom Avatar Component for consistent look
+  const UserAvatar = ({ name, photo, uid, className }: { name: string, photo?: string, uid: string, className?: string }) => (
+    <Avatar className={cn(className)}>
+      <AvatarImage src={photo || ""} />
+      <AvatarFallback className={cn("text-white font-medium text-xs", getUserColor(uid))}>
+        {getInitials(name)}
+      </AvatarFallback>
+    </Avatar>
+  );
 
   const renderDateSeparator = (date: Date) => (
     <div className="flex items-center my-6 opacity-70">
@@ -385,13 +394,10 @@ export default function Chat() {
                <span className="p-1.5 bg-primary text-primary-foreground rounded-lg"><Hash className="h-4 w-4"/></span>
                StudyHub
             </h2>
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="md:hidden">
-              <X className="h-4 w-4" />
-            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="md:hidden"><X className="h-4 w-4" /></Button>
           </div>
 
           <ScrollArea className="flex-1 px-3 py-4">
-             {/* Channels */}
              <div className="mb-6">
                <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2 px-2">Study Rooms</h3>
                <div className="space-y-0.5">
@@ -411,7 +417,6 @@ export default function Chat() {
                </div>
             </div>
 
-            {/* DMs */}
             <div>
               <h3 className="text-xs font-bold text-muted-foreground uppercase mb-2 px-2">Direct Messages</h3>
               <div className="space-y-1">
@@ -428,10 +433,7 @@ export default function Chat() {
                      )}
                    >
                      <div className="relative">
-                       <Avatar className="h-8 w-8">
-                         <AvatarImage src={u.photoURL || ""} />
-                         <AvatarFallback>{u.name[0]}</AvatarFallback>
-                       </Avatar>
+                       <UserAvatar name={u.name} photo={u.photoURL} uid={u.uid} className="h-8 w-8" />
                        <span className={cn(
                          "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background",
                          u.status === "online" ? "bg-green-500" : "bg-muted-foreground/30"
@@ -448,15 +450,12 @@ export default function Chat() {
           
           {/* User Profile Footer */}
           <div className="p-3 border-t bg-background flex items-center gap-3">
-             <Avatar className="h-9 w-9">
-               <AvatarImage src={profile?.photoURL || ""} />
-               <AvatarFallback>{profile?.displayName?.[0]}</AvatarFallback>
-             </Avatar>
+             <UserAvatar name={profile?.name || user?.email || "Me"} photo={profile?.photoURL || ""} uid={user?.uid || "me"} className="h-9 w-9" />
              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-medium truncate">{profile?.displayName || "Me"}</p>
+                <p className="text-sm font-medium truncate">{profile?.name || user?.email?.split('@')[0] || "Me"}</p>
                 <div className="flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"/>
-                    <p className="text-xs text-muted-foreground truncate">Focus Mode</p>
+                    <p className="text-xs text-muted-foreground truncate">Online</p>
                 </div>
              </div>
              <Settings className="h-4 w-4 text-muted-foreground cursor-pointer" />
@@ -466,43 +465,31 @@ export default function Chat() {
 
       {/* --- Main Chat Area --- */}
       <main className="flex-1 flex flex-col min-w-0 bg-background relative">
-        {/* Header */}
         <header className="h-14 border-b flex items-center justify-between px-4 bg-background/95 backdrop-blur z-10">
           <div className="flex items-center gap-3">
-             {!sidebarOpen && (
-               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
-                 <Menu className="h-5 w-5" />
-               </Button>
-             )}
-             
+             {!sidebarOpen && <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></Button>}
              <div>
                 <h1 className="font-bold flex items-center gap-2">
                     {activeChat.type === "channel" && <Hash className="h-5 w-5 text-muted-foreground" />}
                     {activeChat.name}
                 </h1>
-                <p className="text-xs text-muted-foreground hidden md:block">{activeChat.description || "Active now"}</p>
              </div>
           </div>
 
           <div className="flex items-center gap-1">
-             {/* Pinned Messages Sheet */}
              <Sheet>
                 <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon" title="Pinned Messages" className={cn(pinnedMessages.length > 0 && "text-primary")}>
-                        <Pin className="h-5 w-5" />
-                    </Button>
+                    <Button variant="ghost" size="icon" title="Pinned" className={cn(pinnedMessages.length > 0 && "text-primary")}><Pin className="h-5 w-5" /></Button>
                 </SheetTrigger>
                 <SheetContent>
-                    <SheetHeader>
-                        <SheetTitle>Pinned Messages</SheetTitle>
-                    </SheetHeader>
+                    <SheetHeader><SheetTitle>Pinned Messages</SheetTitle></SheetHeader>
                     <ScrollArea className="h-[90vh] mt-4">
                         {pinnedMessages.length === 0 ? <p className="text-center text-muted-foreground">No pins yet.</p> : (
                             <div className="space-y-4">
                                 {pinnedMessages.map(m => (
                                     <div key={m.id} className="bg-muted p-3 rounded-lg text-sm border-l-4 border-primary">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <Avatar className="h-5 w-5"><AvatarImage src={m.senderPhoto}/></Avatar>
+                                            <UserAvatar name={m.senderName} photo={m.senderPhoto} uid={m.senderId} className="h-5 w-5" />
                                             <span className="font-bold">{m.senderName}</span>
                                         </div>
                                         <p>{m.text}</p>
@@ -514,24 +501,14 @@ export default function Chat() {
                     </ScrollArea>
                 </SheetContent>
              </Sheet>
-
             <div className="relative hidden md:block">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search messages..." 
-                    className="pl-8 h-9 w-48 bg-muted/50 border-none" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <Input placeholder="Search messages..." className="pl-8 h-9 w-48 bg-muted/50 border-none" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
-            
-            <Button variant="ghost" size="icon" onClick={() => setMembersOpen(!membersOpen)}>
-               <Users className="h-5 w-5" />
-            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setMembersOpen(!membersOpen)}><Users className="h-5 w-5" /></Button>
           </div>
         </header>
 
-        {/* Messages */}
         <ScrollArea className="flex-1 p-4 bg-muted/5">
            <div className="max-w-4xl mx-auto pb-4">
               {filteredMessages.map((m, i) => {
@@ -540,32 +517,26 @@ export default function Chat() {
                  const date = m.createdAt?.toDate ? m.createdAt.toDate() : new Date();
                  const showDateSeparator = !prevM || !isToday(date) || (prevM.createdAt?.toDate && !isToday(prevM.createdAt.toDate()));
                  const isMe = m.senderId === user?.uid;
+                 // Fix name logic for old messages if senderName is "User"
+                 const displayName = (m.senderName && m.senderName !== "User") ? m.senderName : (m.senderEmail?.split('@')[0] || "User");
 
                  return (
                     <div key={m.id}>
                        {showDateSeparator && renderDateSeparator(date)}
                        
-                       <div className={cn(
-                          "group flex gap-3 mb-1 hover:bg-muted/40 -mx-4 px-4 py-1.5 transition-colors relative",
-                          !isSameSender && "mt-4"
-                       )}>
+                       <div className={cn("group flex gap-3 mb-1 hover:bg-muted/40 -mx-4 px-4 py-1.5 transition-colors relative", !isSameSender && "mt-4")}>
                           <div className="w-9 shrink-0">
                              {!isSameSender ? (
-                                <Avatar className="h-9 w-9 hover:scale-105 transition-transform cursor-pointer">
-                                   <AvatarImage src={m.senderPhoto} />
-                                   <AvatarFallback>{m.senderName[0]}</AvatarFallback>
-                                </Avatar>
+                                <UserAvatar name={displayName} photo={m.senderPhoto} uid={m.senderId} className="h-9 w-9 hover:scale-105 transition-transform cursor-pointer" />
                              ) : (
-                                <div className="w-9 text-[10px] text-muted-foreground text-center opacity-0 group-hover:opacity-100 pt-1">
-                                   {format(date, "h:mm a")}
-                                </div>
+                                <div className="w-9 text-[10px] text-muted-foreground text-center opacity-0 group-hover:opacity-100 pt-1">{format(date, "h:mm a")}</div>
                              )}
                           </div>
 
                           <div className="flex-1 min-w-0">
                              {!isSameSender && (
                                 <div className="flex items-baseline gap-2 mb-1">
-                                   <span className="font-bold text-sm hover:underline cursor-pointer">{m.senderName}</span>
+                                   <span className="font-bold text-sm hover:underline cursor-pointer">{displayName}</span>
                                    <span className="text-[10px] text-muted-foreground">{format(date, "h:mm a")}</span>
                                    {m.pinned && <Pin className="h-3 w-3 text-primary rotate-45" />}
                                 </div>
@@ -578,57 +549,34 @@ export default function Chat() {
                                       <span className="font-medium">@{m.replyTo.name}</span>: <span className="truncate max-w-[200px]">{m.replyTo.text}</span>
                                    </div>
                                 )}
-
-                                {/* Message Type Rendering */}
-                                {m.type === "image" && (
-                                    <img src={m.imageUrl} className="rounded-md max-h-72 border shadow-sm my-1" alt="Attachment" />
-                                )}
-                                
+                                {m.type === "image" && <img src={m.imageUrl} className="rounded-md max-h-72 border shadow-sm my-1" alt="Attachment" />}
                                 {m.type === "file" && (
                                     <div className="flex items-center gap-3 bg-muted p-3 rounded-md border w-fit my-1">
                                         <div className="p-2 bg-background rounded-full"><FileText className="h-6 w-6 text-primary"/></div>
-                                        <div>
-                                            <p className="font-medium text-sm truncate max-w-[200px]">{m.fileName}</p>
-                                            <a href={m.fileUrl} target="_blank" className="text-xs text-primary hover:underline">Download</a>
-                                        </div>
+                                        <div><p className="font-medium text-sm truncate max-w-[200px]">{m.fileName}</p><a href={m.fileUrl} target="_blank" className="text-xs text-primary hover:underline">Download</a></div>
                                     </div>
                                 )}
-
                                 {m.type === "audio" && (
                                     <div className="flex items-center gap-2 bg-muted p-2 rounded-full border w-fit pr-4 my-1">
-                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-primary text-primary-foreground">
-                                            <Play className="h-4 w-4 ml-0.5" />
-                                        </Button>
-                                        <div className="h-1 bg-border w-32 rounded-full overflow-hidden">
-                                            <div className="h-full bg-primary w-1/2" /> {/* Mock progress */}
-                                        </div>
-                                        <span className="text-xs font-mono">0:00</span>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-primary text-primary-foreground"><Play className="h-4 w-4 ml-0.5" /></Button>
+                                        <div className="h-1 bg-border w-32 rounded-full overflow-hidden"><div className="h-full bg-primary w-1/2" /></div>
+                                        <span className="text-xs font-mono">Audio</span>
                                         <audio src={m.audioUrl} controls className="hidden" />
                                     </div>
                                 )}
-
                                 {m.type === "poll" && m.pollData && (
                                     <div className="bg-card border rounded-lg p-4 max-w-sm my-1 shadow-sm">
-                                        <p className="font-bold mb-3 flex items-center gap-2">
-                                            <BarChart2 className="h-4 w-4 text-primary" /> {m.pollData.question}
-                                        </p>
+                                        <p className="font-bold mb-3 flex items-center gap-2"><BarChart2 className="h-4 w-4 text-primary" /> {m.pollData.question}</p>
                                         <div className="space-y-2">
                                             {m.pollData.options.map((opt) => {
                                                 const totalVotes = m.pollData?.options.reduce((acc, o) => acc + o.votes.length, 0) || 1;
                                                 const percent = Math.round((opt.votes.length / totalVotes) * 100);
                                                 const hasVoted = opt.votes.includes(user!.uid);
-                                                
                                                 return (
                                                     <div key={opt.id} onClick={() => votePoll(m.id, opt.id, opt.votes)} className="cursor-pointer group/poll">
-                                                        <div className="flex justify-between text-xs mb-1 font-medium">
-                                                            <span>{opt.text}</span>
-                                                            <span>{opt.votes.length} votes ({percent}%)</span>
-                                                        </div>
+                                                        <div className="flex justify-between text-xs mb-1 font-medium"><span>{opt.text}</span><span>{opt.votes.length} ({percent}%)</span></div>
                                                         <div className="h-8 relative bg-muted rounded-md overflow-hidden border">
-                                                            <div 
-                                                                className={cn("h-full transition-all duration-500", hasVoted ? "bg-primary" : "bg-primary/20 group-hover/poll:bg-primary/30")} 
-                                                                style={{ width: `${percent}%` }}
-                                                            />
+                                                            <div className={cn("h-full transition-all duration-500", hasVoted ? "bg-primary" : "bg-primary/20 group-hover/poll:bg-primary/30")} style={{ width: `${percent}%` }} />
                                                             {hasVoted && <Check className="absolute right-2 top-2 h-4 w-4 text-primary-foreground" />}
                                                         </div>
                                                     </div>
@@ -637,18 +585,11 @@ export default function Chat() {
                                         </div>
                                     </div>
                                 )}
-
                                 {m.text && <p className="leading-relaxed whitespace-pre-wrap">{m.text}</p>}
-                                
-                                {/* Hover Actions */}
                                 <div className="absolute -top-3 right-0 bg-background border shadow-sm rounded-md flex p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyingTo(m)} title="Reply"><Reply className="h-3 w-3" /></Button>
                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => togglePin(m)} title="Pin"><Pin className={cn("h-3 w-3", m.pinned && "fill-current")} /></Button>
-                                   {isMe && (
-                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteDoc(doc(db, "chats", activeChat.id, "messages", m.id))}>
-                                        <Trash2 className="h-3 w-3" />
-                                      </Button>
-                                   )}
+                                   {isMe && <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteDoc(doc(db, "chats", activeChat.id, "messages", m.id))}><Trash2 className="h-3 w-3" /></Button>}
                                 </div>
                              </div>
                           </div>
@@ -660,28 +601,17 @@ export default function Chat() {
            </div>
         </ScrollArea>
 
-        {/* Input Area */}
         <div className="p-4 bg-background border-t">
            <div className="max-w-4xl mx-auto space-y-2">
-              {/* Reply Context */}
               {replyingTo && (
                  <div className="flex items-center justify-between bg-muted/40 p-2 rounded-lg border border-l-4 border-l-primary animate-in slide-in-from-bottom-2">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                       <Reply className="h-3 w-3" />
-                       <span className="font-semibold">Replying to {replyingTo.senderName}</span>
-                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground"><Reply className="h-3 w-3" /><span className="font-semibold">Replying to {replyingTo.senderName}</span></div>
                     <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setReplyingTo(null)}><X className="h-3 w-3" /></Button>
                  </div>
               )}
-
-              {/* Main Input Box */}
               <div className="flex items-end gap-2 bg-muted/30 p-2 rounded-xl border focus-within:ring-1 focus-within:ring-primary transition-all">
                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted">
-                            <Paperclip className="h-5 w-5" />
-                        </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:bg-muted"><Paperclip className="h-5 w-5" /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
                         <DropdownMenuItem onClick={() => fileInputRef.current?.click()}><ImageIcon className="h-4 w-4 mr-2"/> Image</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => fileInputRef.current?.click()}><FileText className="h-4 w-4 mr-2"/> Document</DropdownMenuItem>
@@ -689,9 +619,7 @@ export default function Chat() {
                         <DropdownMenuItem onClick={() => setPollDialogOpen(true)}><BarChart2 className="h-4 w-4 mr-2"/> Create Poll</DropdownMenuItem>
                     </DropdownMenuContent>
                  </DropdownMenu>
-
                  <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} />
-
                  <Textarea
                     value={text}
                     onChange={(e) => { setText(e.target.value); if(!typingTimeoutRef.current) updateDoc(doc(db,"chats",activeChat.id),{[`typing.${user?.uid}`]:true}); clearTimeout(typingTimeoutRef.current!); typingTimeoutRef.current=setTimeout(()=>updateDoc(doc(db,"chats",activeChat.id),{[`typing.${user?.uid}`]:false}),2000); }}
@@ -700,19 +628,12 @@ export default function Chat() {
                     className="min-h-[24px] max-h-40 bg-transparent border-none shadow-none focus-visible:ring-0 resize-none py-2.5 px-2"
                     rows={1}
                  />
-
                  <div className="flex items-center gap-1 pb-1">
-                    {/* Voice Recorder */}
                     {isRecording ? (
-                        <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full animate-pulse" onClick={stopRecording}>
-                            <StopCircle className="h-4 w-4" />
-                        </Button>
+                        <Button variant="destructive" size="icon" className="h-8 w-8 rounded-full animate-pulse" onClick={stopRecording}><StopCircle className="h-4 w-4" /></Button>
                     ) : (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground" onClick={startRecording}>
-                            <Mic className="h-5 w-5" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground" onClick={startRecording}><Mic className="h-5 w-5" /></Button>
                     )}
-
                     <Button onClick={() => handleSendMessage()} disabled={!text.trim() && !isUploading} size="icon" className="h-8 w-8 rounded-full">
                        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                     </Button>
@@ -735,7 +656,7 @@ export default function Chat() {
                     {channelMembers.filter(u => u.status === 'online').map(u => (
                         <div key={u.uid} className="flex items-center gap-3 mb-2 opacity-90 hover:opacity-100 cursor-pointer">
                             <div className="relative">
-                                <Avatar className="h-8 w-8"><AvatarImage src={u.photoURL} /><AvatarFallback>{u.name[0]}</AvatarFallback></Avatar>
+                                <UserAvatar name={u.name} photo={u.photoURL} uid={u.uid} className="h-8 w-8" />
                                 <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 border-2 border-background rounded-full"></span>
                             </div>
                             <p className="text-sm font-medium truncate">{u.name}</p>
@@ -746,7 +667,7 @@ export default function Chat() {
                     <h4 className="text-xs font-bold text-muted-foreground uppercase mb-2">Offline — {channelMembers.filter(u => u.status === 'offline').length}</h4>
                     {channelMembers.filter(u => u.status === 'offline').map(u => (
                         <div key={u.uid} className="flex items-center gap-3 mb-2 opacity-50 hover:opacity-100 cursor-pointer">
-                            <Avatar className="h-8 w-8 grayscale"><AvatarImage src={u.photoURL} /><AvatarFallback>{u.name[0]}</AvatarFallback></Avatar>
+                            <UserAvatar name={u.name} photo={u.photoURL} uid={u.uid} className="h-8 w-8" />
                             <p className="text-sm font-medium truncate">{u.name}</p>
                         </div>
                     ))}
@@ -763,15 +684,11 @@ export default function Chat() {
             <div className="space-y-3 py-4">
                 <Input placeholder="Question (e.g., When should we study?)" value={pollQuestion} onChange={e => setPollQuestion(e.target.value)} />
                 {pollOptions.map((opt, i) => (
-                    <Input key={i} placeholder={`Option ${i + 1}`} value={opt} onChange={e => {
-                        const newOpts = [...pollOptions]; newOpts[i] = e.target.value; setPollOptions(newOpts);
-                    }} />
+                    <Input key={i} placeholder={`Option ${i + 1}`} value={opt} onChange={e => { const newOpts = [...pollOptions]; newOpts[i] = e.target.value; setPollOptions(newOpts); }} />
                 ))}
                 <Button variant="outline" size="sm" onClick={() => setPollOptions([...pollOptions, ""])}>+ Add Option</Button>
             </div>
-            <DialogFooter>
-                <Button onClick={createPoll}>Create Poll</Button>
-            </DialogFooter>
+            <DialogFooter><Button onClick={createPoll}>Create Poll</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
