@@ -94,7 +94,7 @@ const StatCard = ({ icon: Icon, label, value, trend, trendValue, color }: any) =
         )}
       </div>
       <div>
-        <p className="text-3xl font-black tracking-tighter mt-4 truncate uppercase italic">{value}</p>
+        <p className="text-2xl md:text-3xl font-black tracking-tighter mt-4 truncate uppercase italic">{value}</p>
         <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] truncate">{label}</p>
       </div>
     </SpotlightCard>
@@ -205,7 +205,7 @@ export default function Dashboard() {
       {/* HERO SECTION */}
       <section className="flex flex-col md:flex-row justify-between items-end gap-6 pt-10">
         <div className="space-y-2">
-          <h1 className="text-5xl md:text-7xl xl:text-8xl font-black tracking-tighter italic uppercase">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter italic uppercase">
             {greeting}, <br />
             <span className="text-primary drop-shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]">
               {user?.displayName?.split(" ")[0] || "Student"}
@@ -239,7 +239,7 @@ export default function Dashboard() {
       )}
 
       {/* STATS BENTO GRID */}
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard icon={Flame} label="Bio-Streak" value={`${stats.streak} Days`} trend="up" trendValue="Peak" color="from-orange-500 to-red-500" />
         <StatCard icon={Target} label="Milestones" value={`${stats.completed}/${stats.total}`} trend={stats.completed > 0 ? "up" : undefined} trendValue="Active" color="from-emerald-500 to-green-500" />
         <StatCard icon={Clock} label="Velocity" value={stats.weeklyHours} trend="up" trendValue="+12%" color="from-blue-500 to-cyan-500" />
@@ -247,7 +247,7 @@ export default function Dashboard() {
       </div>
 
       {/* MAIN CONTENT BENTO GRID */}
-      <div className="grid grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* LEFT COLUMN: ARCHITECTURE & PERFORMANCE */}
         <div className="lg:col-span-8 space-y-8">
@@ -280,7 +280,7 @@ export default function Dashboard() {
           </SpotlightCard>
 
           {/* PLAYLISTS & DASHBOARD PREVIEW */}
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <SpotlightCard className="p-0 border-purple-500/10">
               <div className="p-6 border-b border-border/40 flex justify-between items-center bg-purple-500/5">
                 <h3 className="font-black italic uppercase tracking-tighter flex items-center gap-2">
