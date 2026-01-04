@@ -23,6 +23,7 @@ import Chat from "./pages/Chat";
 import Performance from "./pages/Performance";
 import Flashcards from "./pages/Flashcards";
 import Gateway from "./pages/gateway";
+import Layout from "./components/Layout"; // Import the new Layout component
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,85 +46,95 @@ const App = () => (
             <BrowserRouter>
               <ErrorBoundary>
                 <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/gateway" element={<Gateway />} />
-              
-              <Route
-                path="/admin"
-                element={
-                  <AdminRoute>
-                    <AdminPanel />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/goals"
-                element={
-                  <ProtectedRoute>
-                    <Goals />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/playlists"
-                element={
-                  <ProtectedRoute>
-                    <Playlists />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              {/* NEW ROUTES */}
-              <Route
-                path="/leaderboard"
-                element={
-                  <ProtectedRoute>
-                    <Leaderboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/chat"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/performance"
-                element={
-                  <ProtectedRoute>
-                    <Performance />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/flashcards"
-                element={
-                  <ProtectedRoute>
-                    <Flashcards />
-                  </ProtectedRoute>
-                }
-              />
+                  {/* WRAP EVERYTHING IN LAYOUT */}
+                  <Route element={<Layout />}>
+                    
+                    {/* Public Routes */}
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/auth" element={<Auth />} />
+                    
+                    {/* Gateway (Role Redirection) */}
+                    <Route path="/gateway" element={<Gateway />} />
+                    
+                    {/* Admin Routes */}
+                    <Route
+                      path="/admin"
+                      element={
+                        <AdminRoute>
+                          <AdminPanel />
+                        </AdminRoute>
+                      }
+                    />
 
-              <Route path="*" element={<NotFound />} />
+                    {/* Protected User Routes */}
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/goals"
+                      element={
+                        <ProtectedRoute>
+                          <Goals />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/playlists"
+                      element={
+                        <ProtectedRoute>
+                          <Playlists />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <Profile />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/leaderboard"
+                      element={
+                        <ProtectedRoute>
+                          <Leaderboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/chat"
+                      element={
+                        <ProtectedRoute>
+                          <Chat />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/performance"
+                      element={
+                        <ProtectedRoute>
+                          <Performance />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/flashcards"
+                      element={
+                        <ProtectedRoute>
+                          <Flashcards />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* 404 Route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
                 </Routes>
               </ErrorBoundary>
             </BrowserRouter>

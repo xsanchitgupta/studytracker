@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -9,8 +9,63 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, TrendingUp, Brain, Clock, Target, BarChart3, Zap, Award, Flame } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Area, AreaChart } from "recharts";
+import { ArrowLeft, TrendingUp, Brain, Clock, Target, BarChart3, Zap, Award, Flame, Activity } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart, CartesianGrid, Line } from "recharts";
+import { startOfDay, subDays, format, isSameDay } from "date-fns";
+
+// --- UI HELPERS ---
+
+const SpotlightCard = ({ children, className = "", onClick, noHover = false }: any) => {
+  const divRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [opacity, setOpacity] = useState(0);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!divRef.current) return;
+    const rect = divRef.current.getBoundingClientRect();
+    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
+
+  return (
+    <div
+      ref={divRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setOpacity(1)}
+      onMouseLeave={() => setOpacity(0)}
+      onClick={onClick}
+      className={cn(
+        "relative overflow-hidden rounded-3xl border bg-background/50 backdrop-blur-md transition-all duration-300",
+        !noHover && "hover:border-primary/20",
+        onClick && "cursor-pointer active:scale-[0.99]",
+        className
+      )}
+    >
+      <div
+        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 hidden md:block z-0"
+        style={{ opacity, background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, rgba(120, 119, 198, 0.1), transparent 40%)` }}
+      />
+      <div className="absolute inset-0 md:hidden pointer-events-none z-0 opacity-50 bg-gradient-to-br from-primary/5 to-transparent" />
+      <div className="relative z-10 h-full">{children}</div>
+    </div>
+  );
+};
+
+const StatCard = ({ icon: Icon, label, value, color, subtext }: any) => (
+  <SpotlightCard className="p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform cursor-default">
+    <div className="flex justify-between items-start">
+      <div className={cn("p-2.5 rounded-xl bg-gradient-to-br shadow-inner text-white", color)}>
+        <Icon className="h-5 w-5" />
+      </div>
+      {subtext && <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">{subtext}</span>}
+    </div>
+    <div>
+      <p className="text-2xl font-bold tracking-tight">{value}</p>
+      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
+    </div>
+  </SpotlightCard>
+);
+
+// --- MAIN PAGE ---
 
 export default function Performance() {
   const { user } = useAuth();
@@ -28,7 +83,7 @@ export default function Performance() {
 
     const fetchData = async () => {
       try {
-        // 1. Fetch Flashcards for Retention Stats
+        // --- 1. Real Flashcard Stats ---
         const cardsSnap = await getDocs(collection(db, "users", user.uid, "flashcardDecks"));
         let learning = 0, reviewing = 0, mastered = 0;
         let totalCards = 0;
@@ -50,32 +105,70 @@ export default function Performance() {
           { name: "Mastered", value: mastered, color: "#22c55e" }
         ]);
 
-        // 2. Fetch Playlists for Study Time
-        const playlistsSnap = await getDocs(collection(db, "users", user.uid, "playlists"));
-        const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-        const weeklyData = days.map(day => ({
-          day,
-          minutes: Math.floor(Math.random() * 120) + 30, // Mock data - replace with real data
-          goal: 60
+        // --- 2. Real Study Time (From Logs) ---
+        // Fetch last 7 days of logs
+        const sevenDaysAgo = subDays(startOfDay(new Date()), 6);
+        const logsSnap = await getDocs(query(
+           collection(db, "users", user.uid, "study_logs"),
+           where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo))
+        ));
+
+        const rawLogs = logsSnap.docs.map(d => ({
+           minutes: d.data().minutes || 0,
+           subject: d.data().subject || "General",
+           createdAt: d.data().createdAt?.toDate() || new Date()
         }));
+
+        // Group by Day for Chart
+        const last7Days = Array.from({ length: 7 }, (_, i) => subDays(new Date(), 6 - i));
+        
+        const weeklyData = last7Days.map(date => {
+           const dayLogs = rawLogs.filter(log => isSameDay(log.createdAt, date));
+           const totalMinutes = dayLogs.reduce((acc, log) => acc + log.minutes, 0);
+           return {
+              day: format(date, 'EEE'),
+              minutes: totalMinutes,
+              goal: 60 // This could be a user setting in the future
+           };
+        });
+        
         setStudyTime(weeklyData);
 
-        // 3. Subject Distribution
+        // --- 3. Real Subject Distribution ---
         let subjectCounts: Record<string, number> = {};
-        playlistsSnap.docs.forEach(doc => {
-          const d = doc.data();
-          const title = d.title || "Other";
-          subjectCounts[title] = (subjectCounts[title] || 0) + (d.lectures?.length || 0);
+        rawLogs.forEach(log => {
+           subjectCounts[log.subject] = (subjectCounts[log.subject] || 0) + log.minutes;
         });
-        setSubjectData(Object.entries(subjectCounts).map(([name, value]) => ({ name, value })));
+        
+        // If no logs yet, try to fallback to playlist counts for "Interest"
+        if (Object.keys(subjectCounts).length === 0) {
+           const playlistsSnap = await getDocs(collection(db, "users", user.uid, "playlists"));
+           playlistsSnap.docs.forEach(doc => {
+              const d = doc.data();
+              // Try to guess subject from title (e.g., "Math 101" -> "Math")
+              const title = d.title || "Other";
+              const subject = title.split(" ")[0] || "General";
+              subjectCounts[subject] = (subjectCounts[subject] || 0) + (d.lectures?.length || 0);
+           });
+        }
 
-        // 4. Calculate Focus Score (mock calculation)
+        const sortedSubjects = Object.entries(subjectCounts)
+           .map(([name, value]) => ({ name, value }))
+           .sort((a,b) => b.value - a.value)
+           .slice(0, 5);
+           
+        setSubjectData(sortedSubjects);
+
+        // --- 4. Focus Score (Derived from Real Data) ---
         const totalMinutes = weeklyData.reduce((acc, d) => acc + d.minutes, 0);
         const avgDaily = totalMinutes / 7;
-        const goalMet = weeklyData.filter(d => d.minutes >= d.goal).length;
-        setFocusScore(Math.min(100, Math.round((avgDaily / 60) * 50 + (goalMet / 7) * 50)));
-
+        const consistency = weeklyData.filter(d => d.minutes >= 20).length; // Days with >20m study
+        // Formula: 60% based on hitting average goals, 40% based on consistency
+        const score = Math.min(100, Math.round(((avgDaily / 60) * 60) + ((consistency / 7) * 40)));
+        
+        setFocusScore(score);
         setLoading(false);
+
       } catch (error) {
         console.error("Error fetching performance data:", error);
         setLoading(false);
@@ -87,293 +180,238 @@ export default function Performance() {
 
   if (loading) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center",
-        theme === "dark" ? "bg-background" : "bg-background"
-      )}>
-        <div className="text-center space-y-4">
-          <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Loading analytics...</p>
+      <div className={cn("min-h-[80vh] flex items-center justify-center", theme === "dark" ? "bg-background" : "bg-background")}>
+        <div className="flex flex-col items-center gap-4">
+           <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+           <p className="text-muted-foreground animate-pulse">Analysing performance...</p>
         </div>
       </div>
     );
   }
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ff6b9d'];
+  const totalCards = flashcardStats.reduce((a, b) => a + b.value, 0);
+  const totalStudyHours = (studyTime.reduce((a, b) => a + b.minutes, 0) / 60).toFixed(1);
 
   return (
-    <div className={cn("min-h-screen transition-colors duration-300 pb-10",
-      theme === "dark" 
-        ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
-        : "bg-gradient-to-br from-background via-background to-muted/20"
+    <div className={cn("container mx-auto px-4 pb-20 animate-in fade-in duration-700 space-y-8", 
+      theme === "dark" ? "text-white" : "text-zinc-900"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
-        theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
-      )}>
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className={cn("p-2 rounded-xl transition-all duration-300",
-                theme === "dark" ? "bg-primary/20" : "bg-primary/10"
-              )}>
-                <TrendingUp className="h-6 w-6 text-primary" />
-              </div>
-              <div>
-                <h1 className={cn("text-2xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
-                  Performance Analytics
-                </h1>
-                <p className="text-xs text-muted-foreground">Deep dive into your learning metrics</p>
-              </div>
-            </div>
-          </div>
+      
+      {/* HEADER */}
+      <div className="flex items-center gap-4 pt-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full hover:bg-muted">
+           <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+           <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+             Performance <TrendingUp className="h-6 w-6 text-primary" />
+           </h1>
+           <p className="text-muted-foreground">Real-time learning metrics</p>
         </div>
-      </header>
+      </div>
 
-      <main className="container mx-auto px-4 py-8 max-w-7xl space-y-8">
-        {/* Focus Score Hero */}
-        <Card className={cn("overflow-hidden border backdrop-blur-x1 transition-all duration-300 animate-in slide-in-from-top-4",
-          theme === "dark" 
-            ? "bg-gradient-to-br from-primary/10 via-background/80 to-background border-white/10 shadow-2xl" 
-            : "bg-gradient-to-br from-primary/5 via-background to-background border-border shadow-lg"
-        )}>
-          <CardContent className="p-8">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div className={cn("p-6 rounded-2xl",
-                  theme === "dark" ? "bg-primary/20" : "bg-primary/10"
-                )}>
-                  <Target className="h-12 w-12 text-primary" />
-                </div>
-                <div>
+      {/* FOCUS SCORE HERO */}
+      <SpotlightCard className="p-0 overflow-hidden border-0" noHover>
+         <div className="relative p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-purple-500/10 to-transparent pointer-events-none" />
+            
+            <div className="flex items-center gap-8 relative z-10">
+               <div className="relative h-28 w-28 flex items-center justify-center">
+                  <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
+                     <path className="text-muted/20" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
+                     <path className="text-primary transition-all duration-1000 ease-out" strokeDasharray={`${focusScore}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center flex-col">
+                     <span className="text-3xl font-bold">{focusScore}</span>
+                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Score</span>
+                  </div>
+               </div>
+               
+               <div>
                   <div className="flex items-center gap-3 mb-2">
-                    <h2 className={cn("text-3xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
-                      Focus Score: {focusScore}/100
-                    </h2>
-                    {focusScore >= 80 && (
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                        <Award className="h-3 w-3 mr-1" />
-                        Excellent
-                      </Badge>
-                    )}
+                     <h2 className="text-3xl font-bold">Focus Score</h2>
+                     {focusScore >= 80 && <Badge className="bg-green-500/20 text-green-500 border-green-500/30 px-2 py-0.5">Excellent</Badge>}
                   </div>
-                  <p className="text-muted-foreground">
-                    {focusScore >= 80 
-                      ? "You are in the top 5% of students this week!" 
-                      : focusScore >= 60
-                      ? "Great progress! Keep up the momentum."
-                      : "Keep studying to improve your focus score."}
+                  <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
+                     {focusScore === 0 ? "No study data yet. Watch a lecture or use the timer to start tracking!" :
+                      focusScore >= 80 ? "Top tier performance! Your consistency is impressive." : 
+                      "Keep building your streak to improve this score."}
                   </p>
-                  <Progress value={focusScore} className="mt-4 h-2 max-w-md" />
-                </div>
-              </div>
-              <Button size="lg" className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90" onClick={() => navigate('/goals')}>
-                <Target className="h-4 w-4 mr-2" />
-                View Goals
-              </Button>
+               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard icon={Brain} label="Total Cards" value={flashcardStats.reduce((a, b) => a + b.value, 0)} color="from-purple-500 to-pink-500" />
-          <StatCard icon={Clock} label="Study Time" value={`${Math.floor(studyTime.reduce((a, b) => a + b.minutes, 0) / 60)}h`} color="from-blue-500 to-cyan-500" />
-          <StatCard icon={Flame} label="Streak" value="7 days" color="from-orange-500 to-red-500" />
-          <StatCard icon={Award} label="Mastered" value={flashcardStats.find(s => s.name === "Mastered")?.value || 0} color="from-green-500 to-emerald-500" />
-        </div>
+            <Button size="lg" className="relative z-10 rounded-full px-8 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-12" onClick={() => navigate('/goals')}>
+               <Target className="mr-2 h-4 w-4" /> View Goals
+            </Button>
+         </div>
+      </SpotlightCard>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Flashcard Retention */}
-          <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
-            theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-          )}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="h-5 w-5 text-purple-500" /> 
-                Flashcard Retention
-              </CardTitle>
-              <CardDescription>Mastery levels distribution</CardDescription>
-            </CardHeader>
-            <CardContent className="h-[300px] relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={flashcardStats}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {flashcardStats.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.95)",
-                      borderRadius: '8px',
-                      border: theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)"
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className={cn("text-4xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
-                  {flashcardStats.reduce((a, b) => a + b.value, 0)}
-                </span>
-                <span className="text-sm text-muted-foreground">Total Cards</span>
-              </div>
-              <div className="flex justify-center gap-4 mt-4">
-                {flashcardStats.map((entry, index) => (
-                  <div key={entry.name} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-xs text-muted-foreground">{entry.name}</span>
+      {/* STATS GRID */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+         <StatCard icon={Brain} label="Total Cards" value={totalCards} color="from-purple-500 to-pink-500" />
+         <StatCard icon={Clock} label="Study Time" value={`${totalStudyHours}h`} color="from-blue-500 to-cyan-500" subtext="Last 7 Days" />
+         <StatCard icon={Flame} label="Daily Goal" value={studyTime[6]?.minutes >= 60 ? "Met" : `${studyTime[6]?.minutes}/60m`} color="from-orange-500 to-red-500" />
+         <StatCard icon={Award} label="Mastered" value={flashcardStats.find(s => s.name === "Mastered")?.value || 0} color="from-green-500 to-emerald-500" />
+      </div>
+
+      {/* CHARTS GRID */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         
+         {/* STUDY VELOCITY CHART */}
+         <SpotlightCard className="p-6 md:p-8 flex flex-col" noHover>
+            <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><TrendingUp className="h-5 w-5" /></div>
+                  <div>
+                     <h3 className="font-bold text-lg">Study Velocity</h3>
+                     <p className="text-xs text-muted-foreground">Daily Minutes vs Goal (60m)</p>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+               </div>
+            </div>
 
-          {/* Study Time Trend */}
-          <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
-            theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-          )}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-500" /> 
-                Study Velocity
-              </CardTitle>
-              <CardDescription>Daily watch time vs. Goal (60m)</CardDescription>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={studyTime}>
-                  <defs>
-                    <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                  <XAxis 
-                    dataKey="day" 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fill: theme === "dark" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false}
-                    tick={{ fill: theme === "dark" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.95)",
-                      borderRadius: '8px',
-                      border: theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)"
-                    }}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="minutes" 
-                    stroke="hsl(var(--primary))" 
-                    fillOpacity={1}
-                    fill="url(#colorMinutes)"
-                    strokeWidth={3}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="goal" 
-                    stroke="#ef4444" 
-                    strokeDasharray="5 5" 
-                    strokeWidth={2} 
-                    dot={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+            <div className="flex-1 min-h-[300px]">
+               <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={studyTime} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                     <defs>
+                        <linearGradient id="colorMinutes" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                           <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        </linearGradient>
+                     </defs>
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
+                     <XAxis 
+                        dataKey="day" 
+                        axisLine={false} 
+                        tickLine={false}
+                        tick={{ fill: 'currentColor', opacity: 0.5, fontSize: 12 }}
+                        dy={10}
+                     />
+                     <YAxis hide />
+                     <Tooltip 
+                        contentStyle={{ 
+                           backgroundColor: theme === "dark" ? "rgba(20,20,20,0.9)" : "rgba(255,255,255,0.9)",
+                           borderRadius: '12px',
+                           border: 'none',
+                           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }}
+                     />
+                     <Area 
+                        type="monotone" 
+                        dataKey="minutes" 
+                        stroke="hsl(var(--primary))" 
+                        fillOpacity={1} 
+                        fill="url(#colorMinutes)" 
+                        strokeWidth={3}
+                     />
+                     <Line 
+                        type="monotone" 
+                        dataKey="goal" 
+                        stroke="#ef4444" 
+                        strokeDasharray="5 5" 
+                        strokeWidth={2} 
+                        dot={false}
+                        activeDot={false}
+                     />
+                  </AreaChart>
+               </ResponsiveContainer>
+            </div>
+         </SpotlightCard>
 
-          {/* Subject Distribution */}
-          {subjectData.length > 0 && (
-            <Card className={cn("lg:col-span-2 backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
-              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-            )}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" /> 
-                  Subject Distribution
-                </CardTitle>
-                <CardDescription>Your learning across different subjects</CardDescription>
-              </CardHeader>
-              <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={subjectData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                    <XAxis 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false}
-                      tick={{ fill: theme === "dark" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                    />
-                    <YAxis 
-                      axisLine={false} 
-                      tickLine={false}
-                      tick={{ fill: theme === "dark" ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.95)",
-                        borderRadius: '8px',
-                        border: theme === "dark" ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)"
-                      }}
-                    />
-                    <Bar 
-                      dataKey="value" 
-                      fill="hsl(var(--primary))" 
-                      radius={[8, 8, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </main>
+         {/* RETENTION CHART */}
+         <SpotlightCard className="p-6 md:p-8 flex flex-col" noHover>
+            <div className="flex items-center justify-between mb-6">
+               <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500"><Brain className="h-5 w-5" /></div>
+                  <h3 className="font-bold text-lg">Retention</h3>
+               </div>
+            </div>
+            
+            <div className="flex-1 min-h-[300px] relative">
+               <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                     <Pie
+                        data={flashcardStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={110}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                     >
+                        {flashcardStats.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                     </Pie>
+                     <Tooltip 
+                        contentStyle={{ 
+                           backgroundColor: theme === "dark" ? "rgba(20,20,20,0.9)" : "rgba(255,255,255,0.9)",
+                           borderRadius: '12px',
+                           border: 'none',
+                           boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                        }}
+                        itemStyle={{ color: theme === "dark" ? "#fff" : "#000" }}
+                     />
+                  </PieChart>
+               </ResponsiveContainer>
+               
+               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-4xl font-bold">{totalCards}</span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-widest">Cards</span>
+               </div>
+            </div>
+
+            <div className="flex justify-center gap-6 mt-4">
+               {flashcardStats.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-2">
+                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
+                     <span className="text-xs font-medium text-muted-foreground">{entry.name}</span>
+                  </div>
+               ))}
+            </div>
+         </SpotlightCard>
+
+         {/* SUBJECT DISTRIBUTION */}
+         {subjectData.length > 0 && (
+            <SpotlightCard className="lg:col-span-2 p-6 md:p-8" noHover>
+               <div className="flex items-center gap-2 mb-6">
+                  <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500"><Activity className="h-5 w-5" /></div>
+                  <h3 className="font-bold text-lg">Subject Breakdown</h3>
+               </div>
+               
+               <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                     <BarChart data={subjectData} layout="vertical" margin={{ left: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} opacity={0.1} />
+                        <XAxis type="number" hide />
+                        <YAxis 
+                           dataKey="name" 
+                           type="category" 
+                           axisLine={false} 
+                           tickLine={false}
+                           width={100}
+                           tick={{ fill: 'currentColor', fontSize: 13, fontWeight: 600 }}
+                        />
+                        <Tooltip 
+                           cursor={{fill: 'rgba(255,255,255,0.05)', radius: 8}}
+                           contentStyle={{ 
+                              backgroundColor: theme === "dark" ? "rgba(20,20,20,0.9)" : "rgba(255,255,255,0.9)",
+                              borderRadius: '12px',
+                              border: 'none'
+                           }}
+                        />
+                        <Bar 
+                           dataKey="value" 
+                           fill="hsl(var(--primary))" 
+                           radius={[0, 8, 8, 0]} 
+                           barSize={32}
+                        />
+                     </BarChart>
+                  </ResponsiveContainer>
+               </div>
+            </SpotlightCard>
+         )}
+      </div>
     </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }: { 
-  icon: any; 
-  label: string; 
-  value: string | number;
-  color: string;
-}) {
-  const { theme } = useTheme();
-  
-  return (
-    <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
-      theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-    )}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground mb-1 truncate">{label}</p>
-            <p className={cn("text-2xl font-bold truncate", theme === "dark" ? "text-white" : "text-foreground")}>
-              {value}
-            </p>
-          </div>
-          <div className={cn(`p-2 rounded-lg bg-gradient-to-br ${color} shrink-0`)}>
-            <Icon className="h-4 w-4 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
