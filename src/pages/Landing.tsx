@@ -73,7 +73,7 @@ const Landing = () => {
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
       {/* Header */}
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -164,7 +164,7 @@ const Landing = () => {
           {features.map((feature, index) => (
             <div
               key={feature.title}
-              className={cn("p-6 rounded-2xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl hover:scale-[1.02] group",
+              className={cn("p-6 rounded-2xl border backdrop-blur-x1 transition-all duration-300 hover:shadow-xl hover:scale-[1.02] group",
                 theme === "dark" ? "bg-background/40 border-white/10 hover:border-primary/30" : "bg-background/60 border-border hover:border-primary/30",
                 `animate-in fade-in slide-in-from-bottom-${Math.min(index + 1, 6)}`
               )}

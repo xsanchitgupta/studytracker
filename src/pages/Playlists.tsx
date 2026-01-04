@@ -108,6 +108,7 @@ import {
   AlertCircle,
   Star,
   Loader2,
+  BookOpen
 } from "lucide-react";
 
 /* ================= TYPES ================= */
@@ -317,7 +318,7 @@ export default function Playlists() {
   const [playlistDescriptionInput, setPlaylistDescriptionInput] = useState("");
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState<{ [key: string]: boolean }>({});
-  
+
   // Global search
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
@@ -459,14 +460,14 @@ export default function Playlists() {
   })();
 
   /* ---------- SYNC NOTES & AUTO-SAVE LOGIC ---------- */
-  
+
   // Immediate Save Function
   const saveNotesImmediate = useCallback(async (lectureId: string, playlistId: string, content: string) => {
     if (!content.trim() && !isDirtyRef.current) return;
-    
+
     // Don't save notes for admin playlists (read-only)
     if (activeRef.current?.isAdmin) return;
-    
+
     // Clear pending timer
     if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
 
@@ -474,25 +475,25 @@ export default function Playlists() {
       setPlaylists((currentPlaylists) => {
         const pIndex = currentPlaylists.findIndex((p) => p.id === playlistId);
         if (pIndex === -1) return currentPlaylists;
-        
+
         const p = currentPlaylists[pIndex];
         const lIndex = p.lectures.findIndex((l) => l.id === lectureId);
         if (lIndex === -1) return currentPlaylists;
-        
+
         const updatedLectures = [...p.lectures];
         updatedLectures[lIndex] = { ...updatedLectures[lIndex], notes: sanitizeNotes(content) };
         const updatedPlaylist = { ...p, lectures: updatedLectures };
-        
+
         // Fire and forget update
         updateDoc(doc(db, "users", user!.uid, "playlists", playlistId), {
           lectures: updatedLectures
         }).catch(err => console.error("Autosave error:", err));
-        
+
         const newPlaylists = [...currentPlaylists];
         newPlaylists[pIndex] = updatedPlaylist;
         return newPlaylists;
       });
-      
+
       setSaveStatus("saved");
       isDirtyRef.current = false;
     } catch (e) {
@@ -508,7 +509,7 @@ export default function Playlists() {
         saveNotesImmediate(activeRef.current.lid, activeRef.current.pid, localNotesRef.current);
       }
     };
-  }, [active, saveNotesImmediate]); 
+  }, [active, saveNotesImmediate]);
 
   // Load new notes
   useEffect(() => {
@@ -679,7 +680,7 @@ export default function Playlists() {
 
   const toggleComplete = async (p: Playlist, lid: string) => {
     if (!user) return;
-    
+
     // Don't allow completion toggle for admin playlists
     if (p.isFromAdmin) {
       toast({
@@ -724,7 +725,7 @@ export default function Playlists() {
     notesSaveTimer.current = setTimeout(async () => {
       // Use refs to get latest values inside timeout to avoid stale closures
       const currentActive = activeRef.current;
-      
+
       if (!currentActive || !user) {
         setSaveStatus("idle");
         return;
@@ -737,7 +738,7 @@ export default function Playlists() {
       }
 
       setSaveStatus("saving");
-      
+
       try {
         setPlaylists((currentPlaylists) => {
           const p = currentPlaylists.find((p) => p.id === currentActive.pid);
@@ -896,7 +897,7 @@ export default function Playlists() {
 
   const deletePlaylist = async (pid: string) => {
     if (!user) return;
-    
+
     const playlist = playlists.find(p => p.id === pid);
     if (playlist?.isFromAdmin) {
       toast({
@@ -906,7 +907,7 @@ export default function Playlists() {
       });
       return;
     }
-    
+
     try {
       await deleteDoc(doc(db, "users", user.uid, "playlists", pid));
       setPlaylists((ps) => ps.filter((p) => p.id !== pid));
@@ -1511,17 +1512,9 @@ export default function Playlists() {
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-indigo-900/5 dark:to-indigo-950/10">
         {/* HEADER */}
-        <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+        <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-x1 supports-[backdrop-filter]:bg-background/60">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowArchived((s) => !s)}
-              >
-                {showArchived ? "Hide Archived" : "Show Archived"}
-              </Button>
               <Button
                 variant="ghost"
                 size="icon"
@@ -1782,7 +1775,7 @@ export default function Playlists() {
                 "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
               )}>
                 {/* SEARCH & FILTER */}
-                <Card className={cn("border-2 shadow-lg backdrop-blur-xl transition-all duration-300",
+                <Card className={cn("border-2 shadow-lg backdrop-blur-x1 transition-all duration-300",
                   theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                 )}>
                   <CardContent className="p-4 space-y-3">
@@ -1822,10 +1815,18 @@ export default function Playlists() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <Button
+                      variant={showArchived ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setShowArchived((s) => !s)}
+                      className="w-full mt-2"
+                    >
+                      {showArchived ? "📂 Hide Archived Playlists" : "📂 Show Archived Playlists"}
+                    </Button>
                   </CardContent>
                 </Card>
 
-                <Card className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-xl",
+                <Card className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-x1",
                   theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                 )}>
                   <CardContent className="flex gap-2 p-4">
@@ -1847,7 +1848,7 @@ export default function Playlists() {
 
                 {/* Error Alert */}
                 {error && (
-                  <Alert variant="destructive" className={cn("backdrop-blur-xl border-2",
+                  <Alert variant="destructive" className={cn("backdrop-blur-x1 border-2",
                     theme === "dark" ? "bg-destructive/20 border-destructive/30" : "bg-destructive/10 border-destructive"
                   )}>
                     <AlertCircle className="h-4 w-4" />
@@ -1858,8 +1859,8 @@ export default function Playlists() {
 
                 {/* RECOMMENDED PLAYLISTS SECTION */}
                 <div className={cn("space-y-4 mb-8 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
-                  theme === "dark" 
-                    ? "bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 border-primary/30 shadow-2xl" 
+                  theme === "dark"
+                    ? "bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 border-primary/30 shadow-2xl"
                     : "bg-gradient-to-br from-primary/5 via-purple-500/5 to-pink-500/5 border-primary/20 shadow-xl"
                 )}>
                   <div className="flex items-center justify-between mb-4">
@@ -1894,97 +1895,97 @@ export default function Playlists() {
                   ) : (
                     <div className="space-y-3">
                       {adminPlaylists.map((p) => {
-                      const filteredLectures = p.lectures.filter(l => {
-                        const matchesSearch = !searchQuery || 
-                          l.title.toLowerCase().includes(searchQuery.toLowerCase());
-                        if (!matchesSearch) return false;
-                        
-                        if (filterOption === "completed") return l.completed;
-                        if (filterOption === "incomplete") return !l.completed;
-                        if (filterOption === "tagged") return (l.tags || []).length > 0;
-                        if (filterOption === "watched") return (l.watchTime || 0) > 0;
-                        return true;
-                      });
+                        const filteredLectures = p.lectures.filter(l => {
+                          const matchesSearch = !searchQuery ||
+                            l.title.toLowerCase().includes(searchQuery.toLowerCase());
+                          if (!matchesSearch) return false;
 
-                      return (
-                        <Card
-                          key={`admin-${p.id}`}
-                          className={cn("border-2 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden backdrop-blur-xl group",
-                            theme === "dark" 
-                              ? "bg-background/50 border-primary/40 hover:border-primary/60" 
-                              : "bg-background/70 border-primary/30 hover:border-primary/50",
-                            active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary shadow-2xl scale-[1.02]"
-                          )}
-                        >
-                          <CardHeader className="space-y-3 pb-3 relative">
-                            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur-xl" />
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <CardTitle className="text-lg font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
-                                    {p.title}
-                                  </CardTitle>
-                                  <Badge className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm">
-                                    <Shield className="h-3 w-3 mr-1" />
-                                    Recommended
-                                  </Badge>
-                                </div>
-                                {p.description && (
-                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
-                                )}
-                                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                                  <span className="flex items-center gap-1">
-                                    <Play className="h-3 w-3" />
-                                    {p.lectures.length} lectures
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            {filteredLectures.length === 0 ? (
-                              <p className="text-xs text-muted-foreground text-center py-4">No lectures match your filters</p>
-                            ) : (
-                              <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-                                {filteredLectures.map((l) => (
-                                  <button
-                                    key={l.id}
-                                    onClick={() => setActive({ pid: p.id, lid: l.id, isAdmin: true })}
-                                    className={cn(
-                                      "w-full text-left p-3 rounded-lg transition-all text-sm group/item",
-                                      theme === "dark" 
-                                        ? active?.pid === p.id && active?.lid === l.id && active?.isAdmin
-                                          ? "bg-primary/30 text-white shadow-md"
-                                          : "hover:bg-white/10 text-muted-foreground hover:text-white border border-transparent hover:border-primary/20"
-                                        : active?.pid === p.id && active?.lid === l.id && active?.isAdmin
-                                          ? "bg-primary/20 text-foreground shadow-md"
-                                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-primary/20"
-                                    )}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      {l.completed ? (
-                                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                                      ) : (
-                                        <div className="h-4 w-4 rounded-full border-2 border-current shrink-0 opacity-50 group-hover/item:opacity-100 transition-opacity" />
-                                      )}
-                                      <span className="truncate flex-1 font-medium">{l.title}</span>
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
+                          if (filterOption === "completed") return l.completed;
+                          if (filterOption === "incomplete") return !l.completed;
+                          if (filterOption === "tagged") return (l.tags || []).length > 0;
+                          if (filterOption === "watched") return (l.watchTime || 0) > 0;
+                          return true;
+                        });
+
+                        return (
+                          <Card
+                            key={`admin-${p.id}`}
+                            className={cn("border-2 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden backdrop-blur-x1 group",
+                              theme === "dark"
+                                ? "bg-background/50 border-primary/40 hover:border-primary/60"
+                                : "bg-background/70 border-primary/30 hover:border-primary/50",
+                              active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary shadow-2xl scale-[1.02]"
                             )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                          >
+                            <CardHeader className="space-y-3 pb-3 relative">
+                              <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur-xl" />
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <CardTitle className="text-lg font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+                                      {p.title}
+                                    </CardTitle>
+                                    <Badge className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm">
+                                      <Shield className="h-3 w-3 mr-1" />
+                                      Recommended
+                                    </Badge>
+                                  </div>
+                                  {p.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+                                  )}
+                                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <Play className="h-3 w-3" />
+                                      {p.lectures.length} lectures
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                              {filteredLectures.length === 0 ? (
+                                <p className="text-xs text-muted-foreground text-center py-4">No lectures match your filters</p>
+                              ) : (
+                                <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                                  {filteredLectures.map((l) => (
+                                    <button
+                                      key={l.id}
+                                      onClick={() => setActive({ pid: p.id, lid: l.id, isAdmin: true })}
+                                      className={cn(
+                                        "w-full text-left p-3 rounded-lg transition-all text-sm group/item",
+                                        theme === "dark"
+                                          ? active?.pid === p.id && active?.lid === l.id && active?.isAdmin
+                                            ? "bg-primary/30 text-white shadow-md"
+                                            : "hover:bg-white/10 text-muted-foreground hover:text-white border border-transparent hover:border-primary/20"
+                                          : active?.pid === p.id && active?.lid === l.id && active?.isAdmin
+                                            ? "bg-primary/20 text-foreground shadow-md"
+                                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-primary/20"
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        {l.completed ? (
+                                          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                                        ) : (
+                                          <div className="h-4 w-4 rounded-full border-2 border-current shrink-0 opacity-50 group-hover/item:opacity-100 transition-opacity" />
+                                        )}
+                                        <span className="truncate flex-1 font-medium">{l.title}</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
                 {/* CUSTOM PLAYLISTS SECTION */}
                 <div className={cn("space-y-4 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
-                  theme === "dark" 
-                    ? "bg-gradient-to-br from-background/60 via-background/40 to-background/60 border-white/10 shadow-xl" 
+                  theme === "dark"
+                    ? "bg-gradient-to-br from-background/60 via-background/40 to-background/60 border-white/10 shadow-xl"
                     : "bg-gradient-to-br from-background/80 via-background/60 to-background/80 border-border shadow-lg"
                 )}>
                   <div className="flex items-center justify-between mb-4">
@@ -2021,421 +2022,421 @@ export default function Playlists() {
                   ) : (
                     <div className="space-y-3">
                       {filteredPlaylists.map((p) => {
-                  const filteredLectures = filteredAndSortedLectures(p);
-                  return (
-                    <Card
-                      key={p.id}
-                      className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl",
-                        theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-                      )}
-                    >
-                      <CardHeader className="space-y-3 pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <CardTitle className="text-lg font-bold">{p.title}</CardTitle>
-                            {p.description && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{p.description}</p>
+                        const filteredLectures = filteredAndSortedLectures(p);
+                        return (
+                          <Card
+                            key={p.id}
+                            className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-x1",
+                              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                             )}
-                            {p.dueDate && (
-                              <Badge variant="outline" className="mt-1 text-xs">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                Due: {new Date(p.dueDate).toLocaleDateString()}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex gap-1 shrink-0">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Popover
-                                    open={dueDatePopoverOpen[p.id]}
-                                    onOpenChange={(open) =>
-                                      setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: open })
-                                    }
-                                  >
-                                    <PopoverTrigger asChild>
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8"
-                                      >
-                                        <Calendar className="h-4 w-4" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="end">
-                                      <CalendarComponent
-                                        mode="single"
-                                        selected={p.dueDate ? new Date(p.dueDate) : undefined}
-                                        onSelect={(date) => {
-                                          if (date) {
-                                            updatePlaylistDueDate(p.id, date.getTime());
-                                          } else {
-                                            updatePlaylistDueDate(p.id, null);
+                          >
+                            <CardHeader className="space-y-3 pb-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className="text-lg font-bold">{p.title}</CardTitle>
+                                  {p.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{p.description}</p>
+                                  )}
+                                  {p.dueDate && (
+                                    <Badge variant="outline" className="mt-1 text-xs">
+                                      <Calendar className="h-3 w-3 mr-1" />
+                                      Due: {new Date(p.dueDate).toLocaleDateString()}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Popover
+                                          open={dueDatePopoverOpen[p.id]}
+                                          onOpenChange={(open) =>
+                                            setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: open })
                                           }
-                                          setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: false });
-                                        }}
-                                        disabled={(date) => date < new Date()}
+                                        >
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-8 w-8"
+                                            >
+                                              <Calendar className="h-4 w-4" />
+                                            </Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-auto p-0" align="end">
+                                            <CalendarComponent
+                                              mode="single"
+                                              selected={p.dueDate ? new Date(p.dueDate) : undefined}
+                                              onSelect={(date) => {
+                                                if (date) {
+                                                  updatePlaylistDueDate(p.id, date.getTime());
+                                                } else {
+                                                  updatePlaylistDueDate(p.id, null);
+                                                }
+                                                setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: false });
+                                              }}
+                                              disabled={(date) => date < new Date()}
+                                            />
+                                            {p.dueDate && (
+                                              <div className="p-3 border-t">
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="w-full"
+                                                  onClick={() => {
+                                                    updatePlaylistDueDate(p.id, null);
+                                                    setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: false });
+                                                  }}
+                                                >
+                                                  Clear Due Date
+                                                </Button>
+                                              </div>
+                                            )}
+                                          </PopoverContent>
+                                        </Popover>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Set Due Date</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          onClick={() => {
+                                            setEditingPlaylistId(p.id);
+                                            setPlaylistDescriptionInput(p.description || "");
+                                            setShowPlaylistDescriptionDialog(true);
+                                          }}
+                                        >
+                                          <FileText className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Edit Description</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          onClick={() => setShowPlaylistStats(p.id)}
+                                        >
+                                          <BarChart3 className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Playlist Statistics</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          onClick={() => duplicatePlaylist(p)}
+                                        >
+                                          <Copy className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Duplicate</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8"
+                                          onClick={() => archivePlaylist(p.id, !p.archived)}
+                                        >
+                                          <Archive className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{p.archived ? "Unarchive" : "Archive"}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-8 w-8 text-destructive hover:text-destructive"
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>Delete Playlist</TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Playlist?</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete "{p.title}"? This action cannot be undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={() => deletePlaylist(p.id)}
+                                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </div>
+
+                              {(() => {
+                                const progress = getPlaylistProgress(p);
+
+                                return (
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                                      <span>{progress}% completed</span>
+                                      <span>
+                                        {p.lectures.filter(l => l.completed).length}/{p.lectures.length}
+                                      </span>
+                                    </div>
+
+                                    <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden shadow-inner">
+                                      <div
+                                        className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500 ease-out rounded-full"
+                                        style={{ width: `${progress}%` }}
                                       />
-                                      {p.dueDate && (
-                                        <div className="p-3 border-t">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={() => {
-                                              updatePlaylistDueDate(p.id, null);
-                                              setDueDatePopoverOpen({ ...dueDatePopoverOpen, [p.id]: false });
-                                            }}
-                                          >
-                                            Clear Due Date
-                                          </Button>
-                                        </div>
-                                      )}
-                                    </PopoverContent>
-                                  </Popover>
-                                </TooltipTrigger>
-                                <TooltipContent>Set Due Date</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => {
-                                      setEditingPlaylistId(p.id);
-                                      setPlaylistDescriptionInput(p.description || "");
-                                      setShowPlaylistDescriptionDialog(true);
-                                    }}
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Edit Description</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => setShowPlaylistStats(p.id)}
-                                  >
-                                    <BarChart3 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Playlist Statistics</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => duplicatePlaylist(p)}
-                                  >
-                                    <Copy className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Duplicate</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => archivePlaylist(p.id, !p.archived)}
-                                  >
-                                    <Archive className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{p.archived ? "Unarchive" : "Archive"}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8 text-destructive hover:text-destructive"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Delete Playlist</TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Playlist?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete "{p.title}"? This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deletePlaylist(p.id)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </CardHeader>
 
-                        {(() => {
-                          const progress = getPlaylistProgress(p);
-
-                          return (
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                                <span>{progress}% completed</span>
-                                <span>
-                                  {p.lectures.filter(l => l.completed).length}/{p.lectures.length}
-                                </span>
-                              </div>
-
-                              <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden shadow-inner">
-                                <div
-                                  className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500 ease-out rounded-full"
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </CardHeader>
-
-                      <CardContent className="space-y-3 pt-3">
-                        {filteredLectures.length === 0 && p.lectures.length > 0 && (
-                          <div className="text-center py-8 text-muted-foreground text-sm">
-                            No lectures match your filters
-                          </div>
-                        )}
-                        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
-                          {filteredLectures.map((l, index) => (
-                            <div
-                              key={l.id}
-                              className={`relative group flex gap-3 p-3 rounded-xl transition-all duration-200 ${active?.lid === l.id
-                                ? "bg-gradient-to-r from-primary/10 to-purple-500/10 ring-2 ring-primary/30 shadow-md"
-                                : "hover:bg-muted/60 hover:shadow-sm"
-                                }`}
-                            >
-                              {sortOption === "custom" && (
-                                <div className="flex flex-col gap-1 justify-center">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      moveLecture(p, l.id, "up");
-                                    }}
-                                    disabled={index === 0}
-                                  >
-                                    <ArrowUp className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      moveLecture(p, l.id, "down");
-                                    }}
-                                    disabled={index === filteredLectures.length - 1}
-                                  >
-                                    <ArrowDown className="h-3 w-3" />
-                                  </Button>
+                            <CardContent className="space-y-3 pt-3">
+                              {filteredLectures.length === 0 && p.lectures.length > 0 && (
+                                <div className="text-center py-8 text-muted-foreground text-sm">
+                                  No lectures match your filters
                                 </div>
                               )}
-                              <div
-                                onClick={() => setActive({ pid: p.id, lid: l.id })}
-                                className="flex-1 flex gap-3 cursor-pointer"
-                              >
-                                <div className="relative w-28 aspect-video bg-black rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
-                                  <img
-                                    src={`https://img.youtube.com/vi/${l.videoId}/mqdefault.jpg`}
-                                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                                    alt={l.title}
-                                  />
-                                  {/* HOVER ACTIONS */}
-                                  <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1.5">
-                                    <Button
-                                      size="icon"
-                                      variant="secondary"
-                                      className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleComplete(p, l.id);
-                                      }}
+                              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
+                                {filteredLectures.map((l, index) => (
+                                  <div
+                                    key={l.id}
+                                    className={`relative group flex gap-3 p-3 rounded-xl transition-all duration-200 ${active?.lid === l.id
+                                      ? "bg-gradient-to-r from-primary/10 to-purple-500/10 ring-2 ring-primary/30 shadow-md"
+                                      : "hover:bg-muted/60 hover:shadow-sm"
+                                      }`}
+                                  >
+                                    {sortOption === "custom" && (
+                                      <div className="flex flex-col gap-1 justify-center">
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            moveLecture(p, l.id, "up");
+                                          }}
+                                          disabled={index === 0}
+                                        >
+                                          <ArrowUp className="h-3 w-3" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-6 w-6"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            moveLecture(p, l.id, "down");
+                                          }}
+                                          disabled={index === filteredLectures.length - 1}
+                                        >
+                                          <ArrowDown className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                    <div
+                                      onClick={() => setActive({ pid: p.id, lid: l.id })}
+                                      className="flex-1 flex gap-3 cursor-pointer"
                                     >
-                                      <Check className="h-3.5 w-3.5" />
-                                    </Button>
+                                      <div className="relative w-28 aspect-video bg-black rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+                                        <img
+                                          src={`https://img.youtube.com/vi/${l.videoId}/mqdefault.jpg`}
+                                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                          alt={l.title}
+                                        />
+                                        {/* HOVER ACTIONS */}
+                                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1.5">
+                                          <Button
+                                            size="icon"
+                                            variant="secondary"
+                                            className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleComplete(p, l.id);
+                                            }}
+                                          >
+                                            <Check className="h-3.5 w-3.5" />
+                                          </Button>
 
-                                    <Button
-                                      size="icon"
-                                      variant="secondary"
-                                      className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setFocusMode(true);
-                                        setActive({ pid: p.id, lid: l.id });
-                                      }}
-                                    >
-                                      <Focus className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
+                                          <Button
+                                            size="icon"
+                                            variant="secondary"
+                                            className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setFocusMode(true);
+                                              setActive({ pid: p.id, lid: l.id });
+                                            }}
+                                          >
+                                            <Focus className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
 
-                                  {l.completed && (
-                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg backdrop-blur-[1px]">
-                                      <div className="bg-primary rounded-full p-1.5">
-                                        <Check className="text-primary-foreground h-5 w-5" />
+                                        {l.completed && (
+                                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg backdrop-blur-[1px]">
+                                            <div className="bg-primary rounded-full p-1.5">
+                                              <Check className="text-primary-foreground h-5 w-5" />
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium line-clamp-2 leading-snug">{l.title}</p>
+                                        {l.watchTime && (
+                                          <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                                            <span>⏱️</span>
+                                            <span>Watched: {l.watchTime} min</span>
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
+                                ))}
+                              </div>
 
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium line-clamp-2 leading-snug">{l.title}</p>
-                                  {l.watchTime && (
-                                    <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                                      <span>⏱️</span>
-                                      <span>Watched: {l.watchTime} min</span>
-                                    </p>
+                              <div className="space-y-2 pt-2 border-t">
+                                <Input
+                                  placeholder="Lecture title"
+                                  value={newLectureTitle}
+                                  onChange={(e) => setNewLectureTitle(e.target.value)}
+                                  className="text-sm"
+                                />
+                                <Input
+                                  placeholder="YouTube link"
+                                  value={newLectureUrl}
+                                  onChange={(e) => setNewLectureUrl(e.target.value)}
+                                  className="text-sm"
+                                />
+                                <Button
+                                  onClick={() => addLecture(p)}
+                                  className="w-full"
+                                >
+                                  Add lecture
+                                </Button>
+
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setBulkMode(!bulkMode);
+                                      setSelectedLectures(new Set());
+                                    }}
+                                    className="flex-1"
+                                  >
+                                    {bulkMode ? "Cancel" : "Bulk Select"}
+                                  </Button>
+                                  {bulkMode && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => bulkMarkComplete(p)}
+                                        disabled={selectedLectures.size === 0}
+                                        className="flex-1"
+                                      >
+                                        Mark Selected
+                                      </Button>
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            disabled={selectedLectures.size === 0}
+                                            className="flex-1"
+                                          >
+                                            Delete Selected
+                                          </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Delete Selected Lectures?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Are you sure you want to delete {selectedLectures.size} lecture(s)? This action cannot be undone.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={() => bulkDeleteLectures(p)}
+                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            >
+                                              Delete
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    </>
+                                  )}
+                                  {!bulkMode && (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          className="flex-1"
+                                        >
+                                          Delete playlist
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Delete Playlist?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to delete "{p.title}"? This action cannot be undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => deletePlaylist(p.id)}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
                                   )}
                                 </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="space-y-2 pt-2 border-t">
-                          <Input
-                            placeholder="Lecture title"
-                            value={newLectureTitle}
-                            onChange={(e) => setNewLectureTitle(e.target.value)}
-                            className="text-sm"
-                          />
-                          <Input
-                            placeholder="YouTube link"
-                            value={newLectureUrl}
-                            onChange={(e) => setNewLectureUrl(e.target.value)}
-                            className="text-sm"
-                          />
-                          <Button
-                            onClick={() => addLecture(p)}
-                            className="w-full"
-                          >
-                            Add lecture
-                          </Button>
-
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setBulkMode(!bulkMode);
-                                setSelectedLectures(new Set());
-                              }}
-                              className="flex-1"
-                            >
-                              {bulkMode ? "Cancel" : "Bulk Select"}
-                            </Button>
-                            {bulkMode && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => bulkMarkComplete(p)}
-                                  disabled={selectedLectures.size === 0}
-                                  className="flex-1"
-                                >
-                                  Mark Selected
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="destructive"
-                                      disabled={selectedLectures.size === 0}
-                                      className="flex-1"
-                                    >
-                                      Delete Selected
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Delete Selected Lectures?</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to delete {selectedLectures.size} lecture(s)? This action cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => bulkDeleteLectures(p)}
-                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      >
-                                        Delete
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              </>
-                            )}
-                            {!bulkMode && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="flex-1"
-                                  >
-                                    Delete playlist
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Playlist?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete "{p.title}"? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => deletePlaylist(p.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2444,7 +2445,7 @@ export default function Playlists() {
 
             {/* PLAYER + NOTES */}
             <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-24"}`)}>
-              <Card className={cn(`shadow-2xl border-2 backdrop-blur-xl transition-all duration-300`,
+              <Card className={cn(`shadow-2xl border-2 backdrop-blur-x1 transition-all duration-300`,
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
                 theatre ? "h-full flex flex-col" : ""
               )}>
@@ -2454,12 +2455,12 @@ export default function Playlists() {
                       {/* Blur effect behind video */}
                       <div className={cn("absolute inset-0 -z-10 blur-3xl opacity-30 transition-opacity",
                         theme === "dark" ? "bg-gradient-to-br from-primary/40 via-purple-500/40 to-pink-500/40" : "bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20"
-                      )} 
-                      style={{
-                        backgroundImage: `url(https://img.youtube.com/vi/${current.videoId}/maxresdefault.jpg)`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center'
-                      }}
+                      )}
+                        style={{
+                          backgroundImage: `url(https://img.youtube.com/vi/${current.videoId}/maxresdefault.jpg)`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center'
+                        }}
                       />
                       <iframe
                         ref={iframeRef}

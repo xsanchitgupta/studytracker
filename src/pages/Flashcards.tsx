@@ -228,7 +228,7 @@ export default function Flashcards() {
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
       {/* HEADER */}
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -325,7 +325,7 @@ export default function Flashcards() {
           {/* LEFT: Stats & Decks */}
           <div className="space-y-6">
             {/* STATS CARD */}
-            <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl",
+            <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader className="pb-2">
@@ -364,7 +364,7 @@ export default function Flashcards() {
           </Card>
 
             {/* DECKS LIST */}
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -433,7 +433,7 @@ export default function Flashcards() {
               {filteredCards.map((card, index) => (
                 <Card 
                   key={card.id} 
-                  className={cn("group backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02]",
+                  className={cn("group backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02]",
                     theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
                     `animate-in fade-in slide-in-from-bottom-${Math.min(index % 5 + 1, 5)}`
                   )}
@@ -469,7 +469,7 @@ export default function Flashcards() {
               ))}
             </div>
             {filteredCards.length === 0 && cards.length > 0 && (
-              <Card className={cn("backdrop-blur-xl border text-center py-12",
+              <Card className={cn("backdrop-blur-x1 border text-center py-12",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardContent>
@@ -480,7 +480,7 @@ export default function Flashcards() {
               </Card>
             )}
             {cards.length === 0 && (
-              <Card className={cn("backdrop-blur-xl border text-center py-12",
+              <Card className={cn("backdrop-blur-x1 border text-center py-12",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardContent>

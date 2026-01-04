@@ -728,7 +728,7 @@ export default function Chat() {
       <div className="absolute inset-0 flex items-center">
         <span className={cn("w-full border-t", theme === "dark" ? "border-white/10" : "border-border")} />
       </div>
-      <span className={cn("relative flex justify-center text-xs font-bold uppercase backdrop-blur-md px-4 py-1.5 rounded-full border shadow-sm", 
+      <span className={cn("relative flex justify-center text-xs font-bold uppercase backdrop-blur-x1 px-4 py-1.5 rounded-full border shadow-sm", 
         theme === "dark" 
           ? "text-muted-foreground/80 bg-black/20 border-white/5" 
           : "text-muted-foreground bg-background/80 border-border"
@@ -1011,7 +1011,7 @@ export default function Chat() {
 
       <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
         {/* Header */}
-        <header className={cn("h-16 px-6 flex items-center justify-between border-b backdrop-blur-xl z-10 shadow-lg",
+        <header className={cn("h-16 px-6 flex items-center justify-between border-b backdrop-blur-x1 z-10 shadow-lg",
           theme === "dark" ? "border-white/5 bg-background/30" : "border-border bg-background/80"
         )}>
           <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -1076,7 +1076,7 @@ export default function Chat() {
         
         {/* Search Bar */}
         {searchOpen && (
-          <div className={cn("px-6 py-3 border-b backdrop-blur-xl", theme === "dark" ? "border-white/5 bg-background/20" : "border-border bg-background/80")}>
+          <div className={cn("px-6 py-3 border-b backdrop-blur-x1", theme === "dark" ? "border-white/5 bg-background/20" : "border-border bg-background/80")}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1119,7 +1119,7 @@ export default function Chat() {
                  )}
                  {displayMessages.length < 5 && !loadingMessages && !searchQuery && (
                     <div className="mb-12 mt-12 animate-in fade-in zoom-in-95 duration-700">
-                       <div className="h-24 w-24 bg-gradient-to-br from-primary/30 to-purple-600/30 rounded-[2rem] flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(var(--primary),0.2)] backdrop-blur-md"><Hash className="h-12 w-12 text-primary" /></div>
+                       <div className="h-24 w-24 bg-gradient-to-br from-primary/30 to-purple-600/30 rounded-[2rem] flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(var(--primary),0.2)] backdrop-blur-x1"><Hash className="h-12 w-12 text-primary" /></div>
                        <h1 className={cn("text-4xl md:text-5xl font-extrabold mb-4 tracking-tight drop-shadow-md", theme === "dark" ? "text-white" : "text-foreground")}>Welcome to #{activeChat.name}!</h1>
                        <p className="text-muted-foreground text-lg max-w-lg">This is the start of the <span className={cn("font-semibold", theme === "dark" ? "text-white" : "text-foreground")}>#{activeChat.name}</span> {activeChat.type === 'channel' ? 'channel' : 'conversation'}.</p>
                     </div>
@@ -1149,7 +1149,7 @@ export default function Chat() {
                              editingMessage?.id === m.id && "bg-primary/10 ring-1 ring-primary/30"
                           )}>
                              {/* Hover Toolbar (Floating Glass) */}
-                             <div className={cn("absolute right-4 -top-5 backdrop-blur-xl border shadow-2xl rounded-full flex items-center gap-0.5 p-1 opacity-0 group-hover/msg:opacity-100 transition-all duration-200 z-20 scale-95 group-hover/msg:scale-100",
+                             <div className={cn("absolute right-4 -top-5 backdrop-blur-x1 border shadow-2xl rounded-full flex items-center gap-0.5 p-1 opacity-0 group-hover/msg:opacity-100 transition-all duration-200 z-20 scale-95 group-hover/msg:scale-100",
                                theme === "dark" ? "bg-black/80 border-white/10" : "bg-background/95 border-border"
                              )}>
                                 <Popover>
@@ -1285,7 +1285,7 @@ export default function Chat() {
            {/* Glassy Typing Indicator */}
            {typingUsers.length > 0 && (
               <div className="absolute bottom-24 left-6 z-30 animate-in slide-in-from-bottom-2 fade-in duration-300">
-                 <div className={cn("backdrop-blur-xl border px-4 py-2 rounded-full shadow-lg flex items-center gap-3",
+                 <div className={cn("backdrop-blur-x1 border px-4 py-2 rounded-full shadow-lg flex items-center gap-3",
                    theme === "dark" ? "bg-black/60 border-white/10" : "bg-background/90 border-border"
                  )}>
                     <div className="flex gap-1 h-2 items-center">
@@ -1351,7 +1351,7 @@ export default function Chat() {
                       {mentionOpen && (
                         <div 
                           ref={mentionRef}
-                          className={cn("absolute bottom-full left-0 mb-2 rounded-lg shadow-2xl border backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 z-50",
+                          className={cn("absolute bottom-full left-0 mb-2 rounded-lg shadow-2xl border backdrop-blur-x1 animate-in fade-in slide-in-from-bottom-2 z-50",
                             theme === "dark" ? "bg-black/90 border-white/10" : "bg-background border-border"
                           )}
                           style={{ minWidth: '200px', maxWidth: '300px' }}
@@ -1505,7 +1505,7 @@ export default function Chat() {
 
       {/* Forward Dialog */}
       <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
-        <DialogContent className={cn("sm:max-w-md backdrop-blur-xl",
+        <DialogContent className={cn("sm:max-w-md backdrop-blur-x1",
           theme === "dark" ? "bg-black/80 border-white/10 text-white" : "bg-background border-border"
         )}>
           <DialogHeader><DialogTitle>Forward Message</DialogTitle></DialogHeader>

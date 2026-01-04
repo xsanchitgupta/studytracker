@@ -308,7 +308,7 @@ export default function Profile() {
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
       {/* Header */}
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -332,7 +332,7 @@ export default function Profile() {
 
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Profile Hero Section */}
-        <Card className={cn("mb-8 overflow-hidden border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-top-4",
+        <Card className={cn("mb-8 overflow-hidden border backdrop-blur-x1 transition-all duration-300 animate-in slide-in-from-top-4",
           theme === "dark" 
             ? "bg-gradient-to-br from-primary/10 via-background/80 to-background border-white/10 shadow-2xl" 
             : "bg-gradient-to-br from-primary/5 via-background to-background border-border shadow-lg"
@@ -504,7 +504,7 @@ export default function Profile() {
           <TabsContent value="overview" className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
               {/* Progress Cards */}
-              <Card className={cn("backdrop-blur-xl border",
+              <Card className={cn("backdrop-blur-x1 border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -539,7 +539,7 @@ export default function Profile() {
               </Card>
 
               {/* Quick Stats */}
-              <Card className={cn("backdrop-blur-xl border",
+              <Card className={cn("backdrop-blur-x1 border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -578,7 +578,7 @@ export default function Profile() {
 
           {/* Achievements Tab */}
           <TabsContent value="achievements" className="space-y-6">
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -624,7 +624,7 @@ export default function Profile() {
 
           {/* Activity Tab */}
           <TabsContent value="activity" className="space-y-6">
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -691,7 +691,7 @@ export default function Profile() {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -776,7 +776,7 @@ export default function Profile() {
             </Card>
 
             {/* Account Settings */}
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -872,7 +872,7 @@ function StatCard({ icon: Icon, label, value, color }: {
   const { theme } = useTheme();
   
   return (
-    <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
+    <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
       theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
     )}>
       <CardContent className="p-6">

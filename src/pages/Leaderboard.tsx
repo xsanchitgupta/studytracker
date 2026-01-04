@@ -152,7 +152,7 @@ export default function Leaderboard() {
         ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -180,7 +180,7 @@ export default function Leaderboard() {
       <main className="container mx-auto px-4 py-8 max-w-6xl space-y-8">
         {/* Current User Rank */}
         {user && currentUserRank > 0 && (
-          <Card className={cn("overflow-hidden border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-top-4",
+          <Card className={cn("overflow-hidden border backdrop-blur-x1 transition-all duration-300 animate-in slide-in-from-top-4",
             theme === "dark" 
               ? "bg-gradient-to-br from-primary/10 via-background/80 to-background border-white/10 shadow-2xl" 
               : "bg-gradient-to-br from-primary/5 via-background to-background border-border shadow-lg"
@@ -244,7 +244,7 @@ export default function Leaderboard() {
           </TabsList>
 
           <TabsContent value={activeTab} className="space-y-4">
-            <Card className={cn("backdrop-blur-xl border",
+            <Card className={cn("backdrop-blur-x1 border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>

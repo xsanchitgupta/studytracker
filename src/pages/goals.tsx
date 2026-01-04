@@ -244,7 +244,7 @@ export default function Goals() {
         ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -285,7 +285,7 @@ export default function Goals() {
         </div>
 
         {/* Hero Card */}
-        <Card className={cn("overflow-hidden border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-top-4",
+        <Card className={cn("overflow-hidden border backdrop-blur-x1 transition-all duration-300 animate-in slide-in-from-top-4",
           theme === "dark" 
             ? "bg-gradient-to-br from-green-500/10 via-background/80 to-background border-white/10 shadow-2xl" 
             : "bg-gradient-to-br from-green-500/5 via-background to-background border-border shadow-lg"
@@ -308,7 +308,7 @@ export default function Goals() {
         </Card>
 
         {/* CREATE GOAL */}
-        <Card className={cn("border-2 border-dashed backdrop-blur-xl transition-all duration-300 hover:shadow-lg",
+        <Card className={cn("border-2 border-dashed backdrop-blur-x1 transition-all duration-300 hover:shadow-lg",
           theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
         )}>
           <CardContent className="p-6 space-y-4">
@@ -360,7 +360,7 @@ export default function Goals() {
         {/* GOALS LIST */}
         <div className="grid gap-6">
           {goals.length === 0 && (
-            <Card className={cn("backdrop-blur-xl border text-center py-16",
+            <Card className={cn("backdrop-blur-x1 border text-center py-16",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardContent>
@@ -380,7 +380,7 @@ export default function Goals() {
             return (
               <Card 
                 key={g.id} 
-                className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.01] overflow-hidden",
+                className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.01] overflow-hidden",
                   theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
                   overdue && (theme === "dark" ? "border-red-500/30 bg-red-500/10" : "border-red-300 bg-red-50/50"),
                   `animate-in fade-in slide-in-from-bottom-${Math.min(index + 1, 5)}`
@@ -529,7 +529,7 @@ function StatCard({ icon: Icon, label, value, color }: {
   const { theme } = useTheme();
   
   return (
-    <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
+    <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
       theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
     )}>
       <CardContent className="p-4">

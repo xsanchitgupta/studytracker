@@ -160,7 +160,7 @@ const Auth = () => {
         ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -179,7 +179,7 @@ const Auth = () => {
       </header>
 
       <main className="flex-1 flex items-center justify-center p-4">
-        <Card className={cn("w-full max-w-md border backdrop-blur-xl shadow-2xl transition-all duration-300",
+        <Card className={cn("w-full max-w-md border backdrop-blur-x1 shadow-2xl transition-all duration-300",
           theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
         )}>
           {isVerificationSent ? (

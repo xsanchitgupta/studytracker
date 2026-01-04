@@ -106,7 +106,7 @@ export default function Performance() {
         ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -133,7 +133,7 @@ export default function Performance() {
 
       <main className="container mx-auto px-4 py-8 max-w-7xl space-y-8">
         {/* Focus Score Hero */}
-        <Card className={cn("overflow-hidden border backdrop-blur-xl transition-all duration-300 animate-in slide-in-from-top-4",
+        <Card className={cn("overflow-hidden border backdrop-blur-x1 transition-all duration-300 animate-in slide-in-from-top-4",
           theme === "dark" 
             ? "bg-gradient-to-br from-primary/10 via-background/80 to-background border-white/10 shadow-2xl" 
             : "bg-gradient-to-br from-primary/5 via-background to-background border-border shadow-lg"
@@ -187,7 +187,7 @@ export default function Performance() {
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Flashcard Retention */}
-          <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl",
+          <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
             theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
           )}>
             <CardHeader>
@@ -240,7 +240,7 @@ export default function Performance() {
           </Card>
 
           {/* Study Time Trend */}
-          <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl",
+          <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
             theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
           )}>
             <CardHeader>
@@ -301,7 +301,7 @@ export default function Performance() {
 
           {/* Subject Distribution */}
           {subjectData.length > 0 && (
-            <Card className={cn("lg:col-span-2 backdrop-blur-xl border transition-all duration-300 hover:shadow-xl",
+            <Card className={cn("lg:col-span-2 backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -358,7 +358,7 @@ function StatCard({ icon: Icon, label, value, color }: {
   const { theme } = useTheme();
   
   return (
-    <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
+    <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
       theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
     )}>
       <CardContent className="p-4">

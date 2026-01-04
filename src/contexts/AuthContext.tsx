@@ -62,164 +62,101 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const ref = doc(db, "users", user.uid);
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        const profileData = snap.data() as UserProfile;
-        // Ensure role field exists
-        if (!profileData.role) {
-          profileData.role = "user";
-        }
-        setProfile(profileData);
-      } else {
-        setProfile(null);
+        setProfile(snap.data() as UserProfile);
       }
     } catch (error) {
       console.error("Error refreshing profile:", error);
-      // Don't throw - let the caller handle errors if needed
     }
   };
 
   useEffect(() => {
     let profileUnsubscribe: (() => void) | null = null;
-    let isMounted = true;
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (firebaseUser) => {
-        try {
-          if (!isMounted) return;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
 
-          setUser(firebaseUser);
-
-          if (!firebaseUser) {
-            setProfile(null);
-            setLoading(false);
-            if (profileUnsubscribe) {
-              profileUnsubscribe();
-              profileUnsubscribe = null;
-            }
-            return;
-          }
-
-          // Unsubscribe from previous profile listener
-          if (profileUnsubscribe) {
-            profileUnsubscribe();
-            profileUnsubscribe = null;
-          }
-
-          const userRef = doc(db, "users", firebaseUser.uid);
-          
-          try {
-            // First, check if user document exists
-            const snap = await getDoc(userRef);
-
-            if (!snap.exists()) {
-              // Create user document with default role
-              try {
-                await setDoc(userRef, {
-                  uid: firebaseUser.uid,
-                  email: firebaseUser.email,
-                  name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
-                  photoURL: firebaseUser.photoURL || null,
-                  role: "user", // Default role
-                  createdAt: serverTimestamp(),
-                  lastSignInAt: serverTimestamp(),
-                });
-              } catch (setError) {
-                console.error("Error creating user document:", setError);
-                // Continue anyway - the snapshot listener will handle it
-              }
-            } else {
-              // Update last sign in time
-              try {
-                await updateDoc(userRef, { 
-                  lastSignInAt: serverTimestamp(),
-                  // Update email/name/photo if changed
-                  email: firebaseUser.email,
-                  name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
-                  photoURL: firebaseUser.photoURL || null,
-                });
-              } catch (updateError) {
-                console.warn("Error updating user document (non-critical):", updateError);
-                // Continue anyway - lastSignInAt update is not critical
-              }
-            }
-
-            // Set up real-time listener for profile changes
-            // This ensures role changes are reflected immediately
-            profileUnsubscribe = onSnapshot(
-              userRef,
-              (docSnap) => {
-                if (!isMounted) return;
-                
-                try {
-                  if (docSnap.exists()) {
-                    const profileData = docSnap.data() as UserProfile;
-                    // Ensure role field exists, default to "user" if missing
-                    if (!profileData.role) {
-                      profileData.role = "user";
-                    }
-                    setProfile(profileData);
-                  } else {
-                    setProfile(null);
-                  }
-                  setLoading(false);
-                } catch (profileError) {
-                  console.error("Error processing profile data:", profileError);
-                  if (isMounted) {
-                    setLoading(false);
-                  }
-                }
-              },
-              (error) => {
-                console.error("Error listening to profile:", error);
-                if (!isMounted) return;
-                
-                // Fallback: try to get profile once
-                getDoc(userRef)
-                  .then((docSnap) => {
-                    if (!isMounted) return;
-                    
-                    if (docSnap.exists()) {
-                      const profileData = docSnap.data() as UserProfile;
-                      if (!profileData.role) {
-                        profileData.role = "user";
-                      }
-                      setProfile(profileData);
-                    } else {
-                      setProfile(null);
-                    }
-                    setLoading(false);
-                  })
-                  .catch((fallbackError) => {
-                    console.error("Error in fallback profile fetch:", fallbackError);
-                    if (isMounted) {
-                      setLoading(false);
-                    }
-                  });
-              }
-            );
-          } catch (dbError) {
-            console.error("Error in auth state change handler:", dbError);
-            if (isMounted) {
-              setLoading(false);
-            }
-          }
-        } catch (error) {
-          console.error("Unexpected error in auth state change:", error);
-          if (isMounted) {
-            setLoading(false);
-          }
+      if (!firebaseUser) {
+        setProfile(null);
+        setLoading(false);
+        if (profileUnsubscribe) {
+          profileUnsubscribe();
+          profileUnsubscribe = null;
         }
-      },
-      (error) => {
-        console.error("Auth state observer error:", error);
-        if (isMounted) {
-          setLoading(false);
-        }
+        return;
       }
-    );
+
+      // Unsubscribe from previous profile listener
+      if (profileUnsubscribe) {
+        profileUnsubscribe();
+      }
+
+      const userRef = doc(db, "users", firebaseUser.uid);
+      
+      // First, check if user document exists
+      const snap = await getDoc(userRef);
+
+      if (!snap.exists()) {
+        // Create user document with default role
+        await setDoc(userRef, {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
+          photoURL: firebaseUser.photoURL || null,
+          role: "user", // Default role
+          createdAt: serverTimestamp(),
+          lastSignInAt: serverTimestamp(),
+        });
+      } else {
+        // Update last sign in time
+        await updateDoc(userRef, { 
+          lastSignInAt: serverTimestamp(),
+          // Update email/name/photo if changed
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
+          photoURL: firebaseUser.photoURL || null,
+        });
+      }
+
+      // Set up real-time listener for profile changes
+      // This ensures role changes are reflected immediately
+      profileUnsubscribe = onSnapshot(
+        userRef,
+        (docSnap) => {
+          if (docSnap.exists()) {
+            const profileData = docSnap.data() as UserProfile;
+            // Ensure role field exists, default to "user" if missing
+            if (!profileData.role) {
+              profileData.role = "user";
+            }
+            setProfile(profileData);
+            console.log("[AuthContext] Profile loaded:", { 
+              uid: profileData.uid, 
+              email: profileData.email, 
+              role: profileData.role 
+            });
+          } else {
+            setProfile(null);
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.error("Error listening to profile:", error);
+          // Fallback: try to get profile once
+          getDoc(userRef).then((docSnap) => {
+            if (docSnap.exists()) {
+              const profileData = docSnap.data() as UserProfile;
+              if (!profileData.role) {
+                profileData.role = "user";
+              }
+              setProfile(profileData);
+            }
+            setLoading(false);
+          });
+        }
+      );
+    });
 
     return () => {
-      isMounted = false;
       unsubscribe();
       if (profileUnsubscribe) {
         profileUnsubscribe();
@@ -232,20 +169,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
-    try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      if (res.user) {
-        try {
-          await sendEmailVerification(res.user);
-        } catch (verificationError) {
-          console.error("Error sending verification email:", verificationError);
-          // Continue even if verification email fails
-        }
-        await signOut(auth);
-      }
-    } catch (error) {
-      console.error("Error during sign up:", error);
-      throw error; // Re-throw to let caller handle it
+    const res = await createUserWithEmailAndPassword(auth, email, password);
+    if (res.user) {
+      await sendEmailVerification(res.user);
+      await signOut(auth);
     }
   };
 
@@ -256,37 +183,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    try {
-      if (auth.currentUser) {
-        try {
-          await updateDoc(doc(db, "users", auth.currentUser.uid), {
-            lastSignOutAt: serverTimestamp(),
-          });
-        } catch (error) {
-          console.error("Error updating last sign out (non-critical):", error);
-          // Continue with logout even if update fails
-        }
-      }
-      await signOut(auth);
-    } catch (error) {
-      console.error("Error during logout:", error);
-      // Still try to sign out even if update fails
+    if (auth.currentUser) {
       try {
-        await signOut(auth);
-      } catch (signOutError) {
-        console.error("Critical error during sign out:", signOutError);
-        throw signOutError;
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+          lastSignOutAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Error updating last sign out:", error);
       }
     }
+    await signOut(auth);
   };
 
   const resetPassword = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email);
-    } catch (error) {
-      console.error("Error sending password reset email:", error);
-      throw error; // Re-throw to let caller handle it
-    }
+    await sendPasswordResetEmail(auth, email);
   };
 
   // Compute isAdmin from profile - single source of truth
