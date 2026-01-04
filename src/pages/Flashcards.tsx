@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { 
   ArrowLeft, Plus, Trash2, Brain, 
   Layers, CheckCircle2, XCircle, 
-  Play, Eye, Keyboard, Sparkles, Zap, Trophy, Search
+  Play, Eye, Keyboard, Sparkles, Zap, Trophy, Search, Clock
 } from "lucide-react";
 
 // Charts
@@ -76,24 +76,54 @@ export default function Flashcards() {
 
   // --- FIREBASE SYNC ---
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "users", user.uid, "flashcards"));
-    const unsub = onSnapshot(q, snap => {
-      const data = snap.docs.map(d => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          front: raw.front,
-          back: raw.back,
-          deckId: raw.deckId || "general",
-          createdAt: raw.createdAt || Date.now(),
-          srs: raw.srs || INITIAL_CARD_DATA 
-        } as Flashcard;
-      });
-      setCards(data);
-    });
-    return () => unsub();
-  }, [user]);
+    if (!user) {
+      setCards([]);
+      return;
+    }
+    
+    let unsub: (() => void) | undefined;
+    
+    try {
+      const q = query(collection(db, "users", user.uid, "flashcards"));
+      unsub = onSnapshot(
+        q, 
+        (snap) => {
+          try {
+            const data = snap.docs.map(d => {
+              const raw = d.data();
+              return {
+                id: d.id,
+                front: raw.front || "",
+                back: raw.back || "",
+                deckId: raw.deckId || "general",
+                createdAt: raw.createdAt || Date.now(),
+                srs: raw.srs || INITIAL_CARD_DATA 
+              } as Flashcard;
+            });
+            setCards(data);
+          } catch (error) {
+            console.error("Error processing flashcards:", error);
+            // Don't show toast on every error, just log it
+          }
+        },
+        (error) => {
+          console.error("Firebase snapshot error:", error);
+          // Only show error if it's a permission error or critical
+          if (error.code === 'permission-denied') {
+            toast.error("Permission denied. Please check your access.");
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error setting up flashcards listener:", error);
+      // Don't show toast, just set empty cards
+      setCards([]);
+    }
+    
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user, toast]);
 
   // --- ACTIONS ---
   const addCard = async () => {
@@ -176,6 +206,21 @@ export default function Flashcards() {
   }
 
   // --- RENDER DASHBOARD ---
+  if (!user) {
+    return (
+      <div className={cn("min-h-screen flex items-center justify-center transition-colors duration-300",
+        theme === "dark" 
+          ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
+          : "bg-gradient-to-br from-background via-background to-muted/20"
+      )}>
+        <div className="text-center space-y-4">
+          <Brain className="h-16 w-16 text-muted-foreground/50 mx-auto" />
+          <p className="text-muted-foreground">Please sign in to access flashcards</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("min-h-screen transition-colors duration-300 pb-10",
       theme === "dark" 

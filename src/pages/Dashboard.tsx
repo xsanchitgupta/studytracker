@@ -69,53 +69,102 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     
+    let isMounted = true;
+    
     // Fetch Goals
     const qGoals = query(collection(db, "users", user.uid, "goals"));
-    const unsubGoals = onSnapshot(qGoals, snap => {
-      const data: Goal[] = snap.docs.map(d => {
-        const raw = d.data() as any;
-        return {
-          id: d.id,
-          title: raw.title ?? "Untitled Goal",
-          subGoals: Array.isArray(raw.subGoals) ? raw.subGoals : [],
-          createdAt: raw.createdAt,
-          deadline: raw.deadline
-        };
-      });
-      setGoals(data);
-    });
+    const unsubGoals = onSnapshot(
+      qGoals, 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const data: Goal[] = snap.docs.map(d => {
+            try {
+              const raw = d.data() as any;
+              return {
+                id: d.id,
+                title: raw.title ?? "Untitled Goal",
+                subGoals: Array.isArray(raw.subGoals) ? raw.subGoals : [],
+                createdAt: raw.createdAt,
+                deadline: raw.deadline
+              };
+            } catch (err) {
+              console.error("Error parsing goal:", err);
+              return null;
+            }
+          }).filter((g): g is Goal => g !== null);
+          
+          if (isMounted) {
+            setGoals(data);
+          }
+        } catch (error) {
+          console.error("Error processing goals:", error);
+        }
+      },
+      (error) => {
+        console.error("Goals listener error:", error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    );
 
     // Fetch Playlists/Videos
     const qPlaylists = query(collection(db, "users", user.uid, "playlists"));
-    const unsubPlaylists = onSnapshot(qPlaylists, snap => {
-      const vids: VideoActivity[] = [];
-      snap.docs.forEach(d => {
-        const raw = d.data() as any;
-        if (Array.isArray(raw.lectures)) {
-          raw.lectures.forEach((l: any) => {
-            vids.push({
-              id: l.id,
-              title: l.title,
-              videoId: l.videoId,
-              watchTime: l.watchTime || 0,
-              completed: l.completed || false,
-              updatedAt: raw.updatedAt, // Approximate last access from playlist
-            });
+    const unsubPlaylists = onSnapshot(
+      qPlaylists, 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const vids: VideoActivity[] = [];
+          snap.docs.forEach(d => {
+            try {
+              const raw = d.data() as any;
+              if (Array.isArray(raw.lectures)) {
+                raw.lectures.forEach((l: any) => {
+                  vids.push({
+                    id: l.id,
+                    title: l.title,
+                    videoId: l.videoId,
+                    watchTime: l.watchTime || 0,
+                    completed: l.completed || false,
+                    updatedAt: raw.updatedAt, // Approximate last access from playlist
+                  });
+                });
+              }
+            } catch (err) {
+              console.error("Error parsing playlist:", err);
+            }
           });
+          
+          if (isMounted) {
+            setVideos(vids);
+            
+            // Sort for recent activity (simplified)
+            const sorted = vids
+              .filter(v => v.updatedAt)
+              .sort((a, b) => b.updatedAt!.toMillis() - a.updatedAt!.toMillis())
+              .slice(0, 5);
+            setRecentActivity(sorted);
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error("Error processing playlists:", error);
+          if (isMounted) {
+            setLoading(false);
+          }
         }
-      });
-      setVideos(vids);
-      
-      // Sort for recent activity (simplified)
-      const sorted = vids
-        .filter(v => v.updatedAt)
-        .sort((a, b) => b.updatedAt!.toMillis() - a.updatedAt!.toMillis())
-        .slice(0, 5);
-      setRecentActivity(sorted);
-      setLoading(false);
-    });
+      },
+      (error) => {
+        console.error("Playlists listener error:", error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    );
 
     return () => {
+      isMounted = false;
       unsubGoals();
       unsubPlaylists();
     };

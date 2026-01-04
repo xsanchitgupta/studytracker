@@ -8,7 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-import { BookOpen, Mail, Lock, User, Loader2, CheckCircle2, ArrowLeft } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { cn } from "@/lib/utils";
+import { BookOpen, Mail, Lock, User, Loader2, CheckCircle2, ArrowLeft, Sparkles } from "lucide-react";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,8 +19,8 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   
-  // Destructure signInWithGoogle from your updated context
-  const { signIn, signUp, resetPassword, signInWithGoogle } = useAuth();
+  const { signIn, signUp, resetPassword, signInWithGoogle, loading: authLoading } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -43,40 +45,29 @@ const Auth = () => {
     }
   };
 
-const handleSignIn = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsLoading(true);
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-  try {
-    const userCredential = await signIn(email, password);
-
-    // ADMIN BYPASS FOR EMAIL VERIFICATION
-    if (
-      !userCredential.user.emailVerified &&
-      userCredential.user.email !== "admin@studytrack.edu"
-    ) {
-      throw { code: "auth/unverified-email" };
+    try {
+      await signIn(email, password);
+      toast({ 
+        title: "Welcome back!", 
+        description: "Successfully signed in. Redirecting..." 
+      });
+      
+      // Navigate to gateway which will route based on role
+      navigate("/gateway", { replace: true });
+    } catch (error: any) {
+      toast({
+        title: "Sign in failed",
+        description: getFriendlyErrorMessage(error.code),
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    toast({ title: "Welcome back!", description: "Successfully signed in." });
-
-    navigate(
-      userCredential.user.email === "admin@studytrack.edu"
-        ? "/admin"
-        : "/dashboard"
-    );
-  } catch (error: any) {
-    toast({
-      title: "Sign in failed",
-      description: getFriendlyErrorMessage(error.code),
-      variant: "destructive",
-    });
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,15 +94,19 @@ const handleSignIn = async (e: React.FormEvent) => {
     setIsLoading(true);
     try {
       await signInWithGoogle();
-      toast({ title: "Welcome!", description: "Successfully signed in with Google." });
-      navigate("/dashboard");
+      toast({ 
+        title: "Welcome!", 
+        description: "Successfully signed in with Google. Redirecting..." 
+      });
+      
+      // Navigate to gateway which will route based on role
+      navigate("/gateway", { replace: true });
     } catch (error: any) {
       toast({
         title: "Google Sign-In failed",
         description: getFriendlyErrorMessage(error.code),
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -143,20 +138,50 @@ const handleSignIn = async (e: React.FormEvent) => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="flex justify-between items-center p-4 md:p-6">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-8 w-8 text-primary" />
-          <span className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent uppercase tracking-tighter">
-            StudySync
-          </span>
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <div className={cn("min-h-screen flex items-center justify-center transition-colors duration-300",
+        theme === "dark" 
+          ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
+          : "bg-gradient-to-br from-background via-background to-muted/20"
+      )}>
+        <div className="text-center space-y-4">
+          <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading...</p>
         </div>
-        <ThemeToggle />
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("min-h-screen flex flex-col transition-colors duration-300",
+      theme === "dark" 
+        ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
+        : "bg-gradient-to-br from-background via-background to-muted/20"
+    )}>
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
+        theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
+      )}>
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className={cn("p-2 rounded-xl transition-all duration-300",
+              theme === "dark" ? "bg-primary/20" : "bg-primary/10"
+            )}>
+              <BookOpen className="h-6 w-6 text-primary" />
+            </div>
+            <span className={cn("text-2xl font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent")}>
+              StudySync
+            </span>
+          </div>
+          <ThemeToggle />
+        </div>
       </header>
 
       <main className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-border/50 shadow-xl">
+        <Card className={cn("w-full max-w-md border backdrop-blur-xl shadow-2xl transition-all duration-300",
+          theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+        )}>
           {isVerificationSent ? (
             <div className="p-6 text-center space-y-4">
               <div className="flex justify-center">
@@ -179,9 +204,18 @@ const handleSignIn = async (e: React.FormEvent) => {
             </div>
           ) : (
             <>
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold">Welcome to StudySync</CardTitle>
-                <CardDescription>Track your goals, ace your exams</CardDescription>
+              <CardHeader className="text-center space-y-2">
+                <div className="flex justify-center mb-2">
+                  <div className={cn("p-3 rounded-2xl",
+                    theme === "dark" ? "bg-primary/20" : "bg-primary/10"
+                  )}>
+                    <Sparkles className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <CardTitle className={cn("text-3xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                  Welcome to StudySync
+                </CardTitle>
+                <CardDescription className="text-base">Track your goals, ace your exams</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Tabs defaultValue="signin" className="w-full">
@@ -196,22 +230,57 @@ const handleSignIn = async (e: React.FormEvent) => {
                         <Label htmlFor="signin-email">Email</Label>
                         <div className="relative">
                           <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input id="signin-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" required />
+                          <Input 
+                            id="signin-email" 
+                            type="email" 
+                            placeholder="you@example.com" 
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            className="pl-10" 
+                            required 
+                            disabled={isLoading}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between items-center">
                           <Label htmlFor="signin-password">Password</Label>
-                          <button type="button" onClick={handleForgotPassword} className="text-xs text-primary hover:underline font-medium">Forgot password?</button>
+                          <button 
+                            type="button" 
+                            onClick={handleForgotPassword} 
+                            className="text-xs text-primary hover:underline font-medium"
+                            disabled={isLoading}
+                          >
+                            Forgot password?
+                          </button>
                         </div>
                         <div className="relative">
                           <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input id="signin-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10" required />
+                          <Input 
+                            id="signin-password" 
+                            type="password" 
+                            placeholder="••••••••" 
+                            value={password} 
+                            onChange={(e) => setPassword(e.target.value)} 
+                            className="pl-10" 
+                            required 
+                            disabled={isLoading}
+                          />
                         </div>
                       </div>
-                      <Button type="submit" className="w-full" disabled={isLoading}>
-                        {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        Sign In
+                      <Button 
+                        type="submit" 
+                        className="w-full bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90" 
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Signing in...
+                          </>
+                        ) : (
+                          "Sign In"
+                        )}
                       </Button>
                     </form>
                   </TabsContent>
@@ -222,26 +291,64 @@ const handleSignIn = async (e: React.FormEvent) => {
                         <Label htmlFor="signup-name">Full Name</Label>
                         <div className="relative">
                           <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input id="signup-name" type="text" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} className="pl-10" required />
+                          <Input 
+                            id="signup-name" 
+                            type="text" 
+                            placeholder="John Doe" 
+                            value={name} 
+                            onChange={(e) => setName(e.target.value)} 
+                            className="pl-10" 
+                            required 
+                            disabled={isLoading}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="signup-email">Email</Label>
                         <div className="relative">
                           <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input id="signup-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-10" required />
+                          <Input 
+                            id="signup-email" 
+                            type="email" 
+                            placeholder="you@example.com" 
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            className="pl-10" 
+                            required 
+                            disabled={isLoading}
+                          />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="signup-password">Password</Label>
                         <div className="relative">
                           <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                          <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10" required minLength={6} />
+                          <Input 
+                            id="signup-password" 
+                            type="password" 
+                            placeholder="••••••••" 
+                            value={password} 
+                            onChange={(e) => setPassword(e.target.value)} 
+                            className="pl-10" 
+                            required 
+                            minLength={6}
+                            disabled={isLoading}
+                          />
                         </div>
                       </div>
-                      <Button type="submit" className="w-full" disabled={isLoading}>
-                        {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        Create Account
+                      <Button 
+                        type="submit" 
+                        className="w-full bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90" 
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Creating account...
+                          </>
+                        ) : (
+                          "Create Account"
+                        )}
                       </Button>
                     </form>
                   </TabsContent>
@@ -261,7 +368,7 @@ const handleSignIn = async (e: React.FormEvent) => {
                 <Button 
                   variant="outline" 
                   type="button" 
-                  className="w-full" 
+                  className="w-full border-2" 
                   onClick={handleGoogleSignIn} 
                   disabled={isLoading}
                 >

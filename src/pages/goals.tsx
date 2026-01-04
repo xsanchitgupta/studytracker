@@ -76,21 +76,56 @@ export default function Goals() {
   useEffect(() => {
     if (!user) return;
 
-    const loadData = async () => {
-      // Load Goals
-      const goalsSnap = await getDocs(collection(db, "users", user.uid, "goals"));
-      const goalsData: Goal[] = goalsSnap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<Goal, "id">),
-      }));
-      setGoals(goalsData);
+    let isMounted = true;
 
-      // Load Playlists for linking
-      const plSnap = await getDocs(collection(db, "users", user.uid, "playlists"));
-      setPlaylists(plSnap.docs.map(d => ({ id: d.id, title: d.data().title })));
+    const loadData = async () => {
+      try {
+        // Load Goals
+        const goalsSnap = await getDocs(collection(db, "users", user.uid, "goals"));
+        const goalsData: Goal[] = goalsSnap.docs.map((d) => {
+          try {
+            return {
+              id: d.id,
+              ...(d.data() as Omit<Goal, "id">),
+            };
+          } catch (err) {
+            console.error("Error parsing goal:", err);
+            return null;
+          }
+        }).filter((g): g is Goal => g !== null);
+        
+        if (isMounted) {
+          setGoals(goalsData);
+        }
+
+        // Load Playlists for linking
+        try {
+          const plSnap = await getDocs(collection(db, "users", user.uid, "playlists"));
+          if (isMounted) {
+            setPlaylists(plSnap.docs.map(d => {
+              try {
+                const data = d.data();
+                return { id: d.id, title: data.title || "Untitled" };
+              } catch (err) {
+                console.error("Error parsing playlist:", err);
+                return { id: d.id, title: "Untitled" };
+              }
+            }));
+          }
+        } catch (playlistError) {
+          console.error("Error loading playlists:", playlistError);
+        }
+      } catch (error) {
+        console.error("Error loading goals data:", error);
+        toast.error("Failed to load goals");
+      }
     };
 
     loadData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   // ---------- ACTIONS ----------

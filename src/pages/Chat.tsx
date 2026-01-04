@@ -95,11 +95,14 @@ const getAvatarColor = (id?: string) => {
 const formatName = (user: { displayName?: string | null, email?: string | null }) => {
   if (user?.email) {
     const namePart = user.email.split('@')[0];
-    return namePart
-      .replace(/[._]/g, ' ')
-      .split(' ')
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' ');
+    if (namePart) {
+      return namePart
+        .replace(/[._]/g, ' ')
+        .split(' ')
+        .filter(part => part.length > 0)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    }
   }
   return user?.displayName || "Anonymous";
 };
@@ -114,8 +117,22 @@ const CHANNELS: ChatSession[] = [
 ];
 
 export default function Chat() {
-  const { user, profile, logout } = useAuth(); 
+  const { user, profile, logout, loading: authLoading } = useAuth(); 
   const navigate = useNavigate();
+
+  // Early return if auth is still loading or user is not available
+  if (authLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    navigate("/auth");
+    return null;
+  }
 
   // Layout State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -162,32 +179,60 @@ export default function Chat() {
   // 1. Fetch Users
   useEffect(() => {
     if (!user) return;
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      const userMap = new Map<string, UserStatus>();
-      snap.docs.forEach(d => {
-        const data = d.data();
-        const isOnline = (data.lastSignInAt?.toMillis() || 0) > (data.lastSignOutAt?.toMillis() || 0);
-        userMap.set(d.id, {
-          uid: d.id,
-          name: data.name || formatName({ email: data.email }),
-          email: data.email,
-          photoURL: data.photoURL,
-          status: isOnline ? "online" : "offline",
-          colorClass: getAvatarColor(d.id),
-          joinedAt: data.createdAt
-        });
-      });
-      setUsers(Array.from(userMap.values()));
-    });
-    return () => unsub();
+    
+    let isMounted = true;
+    
+    const unsub = onSnapshot(
+      collection(db, "users"), 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const userMap = new Map<string, UserStatus>();
+          snap.docs.forEach(d => {
+            try {
+              const data = d.data();
+              const isOnline = (data.lastSignInAt?.toMillis() || 0) > (data.lastSignOutAt?.toMillis() || 0);
+              userMap.set(d.id, {
+                uid: d.id,
+                name: data.name || formatName({ email: data.email }),
+                email: data.email,
+                photoURL: data.photoURL,
+                status: isOnline ? "online" : "offline",
+                colorClass: getAvatarColor(d.id),
+                joinedAt: data.createdAt
+              });
+            } catch (err) {
+              console.error("Error processing user data:", err);
+            }
+          });
+          if (isMounted) {
+            setUsers(Array.from(userMap.values()));
+          }
+        } catch (error) {
+          console.error("Error in users snapshot:", error);
+        }
+      },
+      (error) => {
+        console.error("Users listener error:", error);
+        toast.error("Failed to load users");
+      }
+    );
+    
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [user]);
 
   // 2. Message Listener (Separated for performance)
   useEffect(() => {
     if (!activeChat?.id) return;
+    
     setLoadingMessages(true);
     setMessages([]); 
     setOptimisticMessages(new Map());
+
+    let isMounted = true;
 
     const q = query(
       collection(db, "chats", activeChat.id, "messages"), 
@@ -195,20 +240,52 @@ export default function Chat() {
       limit(150)
     );
 
-    const unsub = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
-      setMessages(msgs);
-      setLoadingMessages(false);
-      
-      if (snap.metadata.hasPendingWrites || msgs.length > 0) {
-         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 200);
+    const unsub = onSnapshot(
+      q, 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const msgs = snap.docs.map(d => {
+            try {
+              return { id: d.id, ...d.data() } as Message;
+            } catch (err) {
+              console.error("Error parsing message:", err);
+              return null;
+            }
+          }).filter((msg): msg is Message => msg !== null);
+          
+          if (isMounted) {
+            setMessages(msgs);
+            setLoadingMessages(false);
+            
+            if (snap.metadata.hasPendingWrites || msgs.length > 0) {
+              setTimeout(() => {
+                if (isMounted && bottomRef.current) {
+                  bottomRef.current.scrollIntoView({ behavior: "smooth" });
+                }
+              }, 200);
+            }
+          }
+        } catch (error) {
+          console.error("Error processing messages:", error);
+          if (isMounted) {
+            setLoadingMessages(false);
+          }
+        }
+      }, 
+      (error) => {
+        console.error("Message listener error:", error);
+        if (isMounted) {
+          setLoadingMessages(false);
+          toast.error("Failed to load messages");
+        }
       }
-    }, (error) => {
-      console.error("Message listener error:", error);
-      setLoadingMessages(false);
-    });
+    );
 
-    return () => unsub();
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [activeChat.id]);
 
   // Merge optimistic messages with real messages
@@ -229,16 +306,38 @@ export default function Chat() {
   // Fetch pinned messages
   useEffect(() => {
     if (!activeChat?.id) return;
+    
+    let isMounted = true;
+    
     const q = query(
       collection(db, "chats", activeChat.id, "messages"),
       where("pinned", "==", true),
       orderBy("createdAt", "desc"),
       limit(10)
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setPinnedMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as Message)));
-    });
-    return () => unsub();
+    
+    const unsub = onSnapshot(
+      q, 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const pinned = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
+          if (isMounted) {
+            setPinnedMessages(pinned);
+          }
+        } catch (error) {
+          console.error("Error fetching pinned messages:", error);
+        }
+      },
+      (error) => {
+        console.error("Pinned messages listener error:", error);
+      }
+    );
+    
+    return () => {
+      isMounted = false;
+      unsub();
+    };
   }, [activeChat.id]);
 
   // Load pinned chats from localStorage
@@ -264,24 +363,42 @@ export default function Chat() {
   useEffect(() => {
     if (!activeChat?.id || !user) return;
     
-    const typingUnsub = onSnapshot(doc(db, "chats", activeChat.id), (snap) => {
-      const data = snap.data();
-      if (data?.typing) {
-        const typers = Object.entries(data.typing)
-          .filter(([uid, isTyping]) => isTyping && uid !== user.uid)
-          .map(([uid]) => {
-             const u = users.find(usr => usr.uid === uid);
-             return u ? u.name.split(' ')[0] : "Someone";
-          });
-        setTypingUsers(typers);
-      } else {
-        setTypingUsers([]);
+    let isMounted = true;
+    
+    const typingUnsub = onSnapshot(
+      doc(db, "chats", activeChat.id), 
+      (snap) => {
+        if (!isMounted) return;
+        try {
+          const data = snap.data();
+          if (data?.typing) {
+            const typers = Object.entries(data.typing)
+              .filter(([uid, isTyping]) => isTyping && uid !== user.uid)
+              .map(([uid]) => {
+                 const u = users.find(usr => usr.uid === uid);
+                 return (u && u.name) ? u.name.split(' ')[0] : "Someone";
+              });
+            if (isMounted) {
+              setTypingUsers(typers);
+            }
+          } else {
+            if (isMounted) {
+              setTypingUsers([]);
+            }
+          }
+        } catch (error) {
+          console.error("Error processing typing data:", error);
+        }
+      }, 
+      (error) => {
+        console.error("Typing listener error:", error);
       }
-    }, (error) => {
-      console.error("Typing listener error:", error);
-    });
+    );
 
-    return () => typingUnsub();
+    return () => {
+      isMounted = false;
+      typingUnsub();
+    };
   }, [activeChat.id, user?.uid, users]);
 
   // --- Actions ---
@@ -753,7 +870,7 @@ export default function Chat() {
                             <div className="relative shrink-0">
                               <Avatar className={cn("transition-all ring-2 ring-transparent group-hover:ring-white/10", collapsed ? "h-8 w-8" : "h-9 w-9")}>
                                 <AvatarImage src={u.photoURL || ""} />
-                                <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{u.name[0]}</AvatarFallback>
+                                <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{(u.name || "?")[0]}</AvatarFallback>
                               </Avatar>
                               <span className={cn(
                                 "absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-background",
@@ -806,7 +923,7 @@ export default function Chat() {
                          <div className="relative shrink-0">
                            <Avatar className={cn("transition-all ring-2 ring-transparent group-hover:ring-white/10", collapsed ? "h-8 w-8" : "h-9 w-9")}>
                              <AvatarImage src={u.photoURL || ""} />
-                             <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{u.name[0]}</AvatarFallback>
+                             <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{(u.name || "?")[0]}</AvatarFallback>
                            </Avatar>
                            <span className={cn(
                              "absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-background",
@@ -847,7 +964,7 @@ export default function Chat() {
             <PopoverTrigger asChild>
               <Avatar className={cn("h-10 w-10 hover:opacity-80 transition-opacity cursor-pointer border shadow-lg", theme === "dark" ? "border-white/10" : "border-border")}>
                  <AvatarImage src={profile?.photoURL || ""} />
-                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">{formatName({email: user?.email})[0]}</AvatarFallback>
+                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">{(formatName({email: user?.email}) || "?")[0]}</AvatarFallback>
               </Avatar>
             </PopoverTrigger>
             <PopoverContent side="right" className="w-auto p-0 border-white/10 bg-transparent border-none" align="end">
@@ -904,7 +1021,7 @@ export default function Chat() {
                   <div className="p-2 bg-primary/20 rounded-xl shadow-glow-primary shrink-0"><Hash className="h-5 w-5 text-primary" /></div> : 
                   <Avatar className={cn("h-10 w-10 border shadow-lg shrink-0", theme === "dark" ? "border-white/10" : "border-border")}>
                     <AvatarImage src={activeChat.avatar} />
-                    <AvatarFallback className={cn("font-bold text-white", activeChat.otherUserId ? getAvatarColor(activeChat.otherUserId) : "bg-gray-500")}>{activeChat.name[0]}</AvatarFallback>
+                    <AvatarFallback className={cn("font-bold text-white", activeChat.otherUserId ? getAvatarColor(activeChat.otherUserId) : "bg-gray-500")}>{(activeChat.name || "?")[0]}</AvatarFallback>
                   </Avatar>
                 }
                 <div className="min-w-0">
@@ -1065,7 +1182,7 @@ export default function Chat() {
                                      <PopoverTrigger asChild>
                                         <Avatar className="h-10 w-10 hover:scale-105 transition-transform duration-300 ring-2 ring-transparent hover:ring-white/20 cursor-pointer shadow-lg">
                                            <AvatarImage src={m.senderPhoto} />
-                                           <AvatarFallback className={cn("text-white font-bold", getAvatarColor(m.senderId))}>{m.senderName[0]}</AvatarFallback>
+                                           <AvatarFallback className={cn("text-white font-bold", getAvatarColor(m.senderId))}>{(m.senderName || "?")[0]}</AvatarFallback>
                                         </Avatar>
                                      </PopoverTrigger>
                                      <PopoverContent className="w-auto p-0 border-none bg-transparent" align="start" side="right">
@@ -1255,7 +1372,7 @@ export default function Chat() {
                                   >
                                     <Avatar className="h-6 w-6">
                                       <AvatarImage src={u.photoURL || ""} />
-                                      <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{u.name[0]}</AvatarFallback>
+                                      <AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{(u.name || "?")[0]}</AvatarFallback>
                                     </Avatar>
                                     <span className={cn("text-sm", theme === "dark" ? "text-white" : "text-foreground")}>{u.name}</span>
                                   </button>
@@ -1303,7 +1420,7 @@ export default function Chat() {
                       <Popover key={u.uid}>
                         <PopoverTrigger asChild>
                            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors">
-                              <div className="relative"><Avatar className="h-9 w-9 ring-2 ring-transparent group-hover:ring-white/20 transition-all"><AvatarImage src={u.photoURL} /><AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{u.name[0]}</AvatarFallback></Avatar><span className="absolute bottom-0 right-0 h-3 w-3 bg-emerald-500 border-2 border-background rounded-full" /></div>
+                              <div className="relative"><Avatar className="h-9 w-9 ring-2 ring-transparent group-hover:ring-white/20 transition-all"><AvatarImage src={u.photoURL} /><AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{(u.name || "?")[0]}</AvatarFallback></Avatar><span className="absolute bottom-0 right-0 h-3 w-3 bg-emerald-500 border-2 border-background rounded-full" /></div>
                               <div className="overflow-hidden"><p className="text-sm font-semibold truncate group-hover:text-primary transition-colors text-gray-200">{u.name}</p><p className="text-[10px] text-muted-foreground/70">Online now</p></div>
                            </div>
                         </PopoverTrigger>
@@ -1321,7 +1438,7 @@ export default function Chat() {
                       <Popover key={u.uid}>
                         <PopoverTrigger asChild>
                            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer group transition-colors">
-                              <Avatar className="h-9 w-9 grayscale group-hover:grayscale-0 transition-all"><AvatarImage src={u.photoURL} /><AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{u.name[0]}</AvatarFallback></Avatar>
+                              <Avatar className="h-9 w-9 grayscale group-hover:grayscale-0 transition-all"><AvatarImage src={u.photoURL} /><AvatarFallback className={cn("text-[10px] text-white font-bold", u.colorClass)}>{(u.name || "?")[0]}</AvatarFallback></Avatar>
                               <p className="text-sm font-medium truncate group-hover:text-foreground transition-colors text-gray-400">{u.name}</p>
                            </div>
                         </PopoverTrigger>
@@ -1369,7 +1486,7 @@ export default function Chat() {
                     <div className="flex items-center gap-2 mb-2">
                       <Avatar className="h-6 w-6">
                         <AvatarImage src={m.senderPhoto} />
-                        <AvatarFallback className={cn("text-[10px] text-white font-bold", getAvatarColor(m.senderId))}>{m.senderName[0]}</AvatarFallback>
+                        <AvatarFallback className={cn("text-[10px] text-white font-bold", getAvatarColor(m.senderId))}>{(m.senderName || "?")[0]}</AvatarFallback>
                       </Avatar>
                       <span className={cn("text-sm font-semibold", theme === "dark" ? "text-white" : "text-foreground")}>{m.senderName}</span>
                       <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
@@ -1408,7 +1525,7 @@ export default function Chat() {
                    <Button key={u.uid} variant="ghost" className={cn("w-full justify-start gap-3 h-12 rounded-xl",
                      theme === "dark" ? "hover:bg-white/10 hover:text-white" : "hover:bg-muted"
                    )} onClick={() => confirmForward(u)}>
-                     <Avatar className="h-8 w-8"><AvatarImage src={u.photoURL || ""} /><AvatarFallback>{u.name[0]}</AvatarFallback></Avatar>
+                     <Avatar className="h-8 w-8"><AvatarImage src={u.photoURL || ""} /><AvatarFallback>{(u.name || "?")[0]}</AvatarFallback></Avatar>
                      {u.name}
                    </Button>
                  ))}

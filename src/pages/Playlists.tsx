@@ -11,6 +11,8 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,6 +200,7 @@ export default function Playlists() {
 
   const [showSymbolPad, setShowSymbolPad] = useState(false);
   const { user } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const symbolButtonRef = useRef<HTMLButtonElement | null>(null);
   const symbolPopupRef = useRef<HTMLDivElement | null>(null);
@@ -1596,9 +1599,13 @@ export default function Playlists() {
           <div className={`grid gap-8 ${focusMode ? "grid-cols-1" : "lg:grid-cols-[380px_minmax(0,1fr)]"}`}>
             {/* SIDEBAR */}
             {!focusMode && (
-              <div className="space-y-4 lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pb-4">
+              <div className={cn("space-y-4 lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pb-4",
+                "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
+              )}>
                 {/* SEARCH & FILTER */}
-                <Card className="border-2 shadow-lg">
+                <Card className={cn("border-2 shadow-lg backdrop-blur-xl transition-all duration-300",
+                  theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+                )}>
                   <CardContent className="p-4 space-y-3">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1639,7 +1646,9 @@ export default function Playlists() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-2 shadow-lg hover:shadow-xl transition-shadow">
+                <Card className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-xl",
+                  theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+                )}>
                   <CardContent className="flex gap-2 p-4">
                     <Input
                       value={newPlaylist}
@@ -1662,7 +1671,9 @@ export default function Playlists() {
                   return (
                     <Card
                       key={p.id}
-                      className="border-2 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
+                      className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl",
+                        theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+                      )}
                     >
                       <CardHeader className="space-y-3 pb-3">
                         <div className="flex items-start justify-between gap-2">
@@ -2075,15 +2086,28 @@ export default function Playlists() {
             )}
 
             {/* PLAYER + NOTES */}
-            <div className={`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-24"}`}>
-              <Card className={`shadow-2xl border-2 ${theatre ? "h-full flex flex-col" : ""}`}>
+            <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-24"}`)}>
+              <Card className={cn(`shadow-2xl border-2 backdrop-blur-xl transition-all duration-300`,
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
+                theatre ? "h-full flex flex-col" : ""
+              )}>
                 {current ? (
                   <>
-                    <div className={`aspect-video bg-black ${theatre ? "flex-1 min-h-0" : ""} rounded-t-lg overflow-hidden relative`}>
+                    <div className={cn(`aspect-video bg-black ${theatre ? "flex-1 min-h-0" : ""} rounded-t-lg overflow-hidden relative`)}>
+                      {/* Blur effect behind video */}
+                      <div className={cn("absolute inset-0 -z-10 blur-3xl opacity-30 transition-opacity",
+                        theme === "dark" ? "bg-gradient-to-br from-primary/40 via-purple-500/40 to-pink-500/40" : "bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20"
+                      )} 
+                      style={{
+                        backgroundImage: `url(https://img.youtube.com/vi/${current.videoId}/maxresdefault.jpg)`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }}
+                      />
                       <iframe
                         ref={iframeRef}
                         src={`https://www.youtube.com/embed/${current.videoId}`}
-                        className="w-full h-full"
+                        className="w-full h-full relative z-10"
                         allowFullScreen
                         onLoad={() => (watchStartRef.current = Date.now())}
                       />

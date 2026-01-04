@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -9,7 +9,7 @@ import {
   getDocs,
   onSnapshot,
   query,
-  where,
+  orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,16 +35,18 @@ import {
   Play,
   Shield,
   BarChart3,
-  Settings,
   ChevronLeft,
   Trash2,
   Edit2,
   Search,
   UserCheck,
-  UserX,
   BookOpen,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  X,
+  Check,
+  Loader2,
 } from "lucide-react";
 
 type Lecture = {
@@ -59,6 +61,7 @@ type Playlist = {
   lectures: Lecture[];
   createdBy?: string;
   createdAt?: any;
+  description?: string;
 };
 
 type User = {
@@ -72,7 +75,7 @@ type User = {
 };
 
 export default function AdminPanel() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, profile, isAdmin, refreshProfile } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
   
@@ -80,47 +83,67 @@ export default function AdminPanel() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [newPlaylist, setNewPlaylist] = useState("");
+  const [newPlaylistDesc, setNewPlaylistDesc] = useState("");
   const [lectureTitle, setLectureTitle] = useState("");
   const [lectureVideo, setLectureVideo] = useState("");
-  const [active, setActive] = useState<string | null>(null);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [playlistLoading, setPlaylistLoading] = useState(false);
 
+  // Load users with real-time updates
   useEffect(() => {
-    loadPlaylists();
-    loadUsers();
+    setLoading(true);
+    const unsub = onSnapshot(
+      query(collection(db, "users"), orderBy("createdAt", "desc")),
+      (snap) => {
+        const usersData = snap.docs.map(d => ({
+          uid: d.id,
+          ...d.data()
+        } as User));
+        setUsers(usersData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error loading users:", error);
+        toast.error("Failed to load users");
+        setLoading(false);
+      }
+    );
+    return () => unsub();
   }, []);
 
-  const loadPlaylists = async () => {
+  // Load playlists
+  const loadPlaylists = useCallback(async () => {
+    setPlaylistLoading(true);
     try {
-      const snap = await getDocs(collection(db, "playlists_global"));
+      const snap = await getDocs(query(collection(db, "playlists_global"), orderBy("createdAt", "desc")));
       setPlaylists(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+        snap.docs.map((d) => ({ 
+          id: d.id, 
+          ...(d.data() as Omit<Playlist, "id">) 
+        }))
       );
     } catch (error) {
       console.error("Error loading playlists:", error);
       toast.error("Failed to load playlists");
+    } finally {
+      setPlaylistLoading(false);
     }
-  };
+  }, []);
 
-  const loadUsers = () => {
-    setLoading(true);
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      const usersData = snap.docs.map(d => ({
-        uid: d.id,
-        ...d.data()
-      } as User));
-      setUsers(usersData);
-      setLoading(false);
-    }, (error) => {
-      console.error("Error loading users:", error);
-      toast.error("Failed to load users");
-      setLoading(false);
-    });
-    return () => unsub();
-  };
+  useEffect(() => {
+    loadPlaylists();
+  }, [loadPlaylists]);
 
+  // User management functions
   const updateUserRole = async (userId: string, newRole: string) => {
+    if (userId === currentUser?.uid) {
+      toast.error("You cannot change your own role");
+      return;
+    }
+
     try {
       await updateDoc(doc(db, "users", userId), {
         role: newRole
@@ -133,9 +156,15 @@ export default function AdminPanel() {
   };
 
   const deleteUser = async (userId: string) => {
+    if (userId === currentUser?.uid) {
+      toast.error("You cannot delete your own account");
+      return;
+    }
+
     if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
       return;
     }
+
     try {
       await deleteDoc(doc(db, "users", userId));
       toast.success("User deleted successfully");
@@ -145,19 +174,23 @@ export default function AdminPanel() {
     }
   };
 
+  // Playlist management functions
   const createPlaylist = async () => {
     if (!newPlaylist.trim()) {
       toast.error("Please enter a playlist title");
       return;
     }
+
     try {
       await addDoc(collection(db, "playlists_global"), {
-        title: newPlaylist,
+        title: newPlaylist.trim(),
+        description: newPlaylistDesc.trim() || "",
         createdBy: currentUser?.uid || "admin",
         lectures: [],
         createdAt: new Date(),
       });
       setNewPlaylist("");
+      setNewPlaylistDesc("");
       toast.success("Playlist created successfully");
       loadPlaylists();
     } catch (error) {
@@ -167,9 +200,10 @@ export default function AdminPanel() {
   };
 
   const deletePlaylist = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this playlist?")) {
+    if (!confirm("Are you sure you want to delete this playlist? All lectures will be removed.")) {
       return;
     }
+
     try {
       await deleteDoc(doc(db, "playlists_global", id));
       toast.success("Playlist deleted successfully");
@@ -181,9 +215,16 @@ export default function AdminPanel() {
   };
 
   const addLecture = async (p: Playlist) => {
-    if (!lectureTitle || !lectureVideo) {
+    if (!lectureTitle.trim() || !lectureVideo.trim()) {
       toast.error("Please fill in both title and video ID");
       return;
+    }
+
+    // Extract video ID from URL if full URL is provided
+    let videoId = lectureVideo.trim();
+    if (videoId.includes("youtube.com") || videoId.includes("youtu.be")) {
+      const match = videoId.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
+      videoId = match ? match[1] : videoId;
     }
 
     try {
@@ -191,8 +232,8 @@ export default function AdminPanel() {
         ...p.lectures,
         {
           id: crypto.randomUUID(),
-          title: lectureTitle,
-          videoId: lectureVideo,
+          title: lectureTitle.trim(),
+          videoId: videoId,
         },
       ];
 
@@ -202,7 +243,7 @@ export default function AdminPanel() {
 
       setLectureTitle("");
       setLectureVideo("");
-      setActive(null);
+      setActivePlaylistId(null);
       toast.success("Lecture added successfully");
       loadPlaylists();
     } catch (error) {
@@ -225,11 +266,18 @@ export default function AdminPanel() {
     }
   };
 
+  // Filtered data
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
+  const filteredPlaylists = playlists.filter(p =>
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Statistics
   const stats = {
     totalUsers: users.length,
     admins: users.filter(u => u.role === "admin").length,
@@ -250,7 +298,7 @@ export default function AdminPanel() {
       )}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full">
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <div className="flex items-center gap-3">
@@ -260,15 +308,46 @@ export default function AdminPanel() {
                 <Shield className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-2xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>Admin Panel</h1>
+                <h1 className={cn("text-2xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                  Admin Panel
+                </h1>
                 <p className="text-xs text-muted-foreground">Manage users, playlists, and system settings</p>
               </div>
             </div>
           </div>
+          <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+            <Shield className="h-3 w-3 mr-1" />
+            Admin Access
+          </Badge>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Debug Info - Only show if role doesn't match */}
+        {profile && profile.role !== "admin" && (
+          <Card className={cn("mb-6 border-2 border-yellow-500/50 backdrop-blur-xl",
+            theme === "dark" ? "bg-yellow-500/10 border-yellow-500/30" : "bg-yellow-50 border-yellow-300"
+          )}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={cn("font-semibold mb-1", theme === "dark" ? "text-yellow-400" : "text-yellow-700")}>
+                    <AlertCircle className="h-4 w-4 inline mr-2" />
+                    Role Mismatch Detected
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Your current role: <span className="font-bold">{profile.role || "user"}</span>
+                    {!isAdmin && " - You need 'admin' role to access this panel"}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={refreshProfile}>
+                  Refresh Profile
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <StatCard icon={Users} label="Total Users" value={stats.totalUsers} color="from-blue-500 to-cyan-500" />
@@ -299,17 +378,20 @@ export default function AdminPanel() {
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
-                    <CardTitle>User Management</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-primary" />
+                      User Management
+                    </CardTitle>
                     <CardDescription>Manage user roles and permissions</CardDescription>
                   </div>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search users..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
                       className="pl-10 w-64"
                     />
                   </div>
@@ -317,32 +399,49 @@ export default function AdminPanel() {
               </CardHeader>
               <CardContent>
                 {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading users...</p>
+                  </div>
                 ) : filteredUsers.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">No users found</div>
+                  <div className="text-center py-12">
+                    <Users className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                    <p className="text-muted-foreground">No users found</p>
+                  </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {filteredUsers.map((u) => (
                       <div
                         key={u.uid}
                         className={cn("flex items-center justify-between p-4 rounded-lg border transition-all hover:scale-[1.01]",
-                          theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border"
+                          theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border",
+                          u.uid === currentUser?.uid && "ring-2 ring-primary/30"
                         )}
                       >
-                        <div className="flex items-center gap-4 flex-1">
-                          <Avatar>
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <Avatar className="h-12 w-12 ring-2 ring-primary/20">
                             <AvatarImage src={u.photoURL || ""} />
-                            <AvatarFallback className="bg-primary text-primary-foreground">
+                            <AvatarFallback className="bg-primary text-primary-foreground font-bold">
                               {u.name[0]?.toUpperCase() || "U"}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
-                            <p className={cn("font-semibold truncate", theme === "dark" ? "text-white" : "text-foreground")}>
-                              {u.name}
-                            </p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className={cn("font-semibold truncate", theme === "dark" ? "text-white" : "text-foreground")}>
+                                {u.name}
+                              </p>
+                              {u.uid === currentUser?.uid && (
+                                <Badge variant="secondary" className="text-xs">You</Badge>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground truncate">{u.email}</p>
+                            {u.lastSignInAt && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Last active: {u.lastSignInAt.toDate ? new Date(u.lastSignInAt.toDate()).toLocaleDateString() : "Unknown"}
+                              </p>
+                            )}
                           </div>
-                          <Badge variant={u.role === "admin" ? "default" : "secondary"}>
+                          <Badge variant={u.role === "admin" ? "default" : "secondary"} className="shrink-0">
                             {u.role === "admin" ? (
                               <><Shield className="h-3 w-3 mr-1" /> Admin</>
                             ) : (
@@ -350,10 +449,11 @@ export default function AdminPanel() {
                             )}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-2 ml-4">
+                        <div className="flex items-center gap-2 ml-4 shrink-0">
                           <Select
                             value={u.role}
                             onValueChange={(value) => updateUserRole(u.uid, value)}
+                            disabled={u.uid === currentUser?.uid}
                           >
                             <SelectTrigger className="w-32">
                               <SelectValue />
@@ -384,52 +484,100 @@ export default function AdminPanel() {
 
           {/* Playlists Tab */}
           <TabsContent value="playlists" className="space-y-4">
+            {/* Create New Playlist */}
             <Card className={cn("backdrop-blur-xl border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
-                <CardTitle>Create New Playlist</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-primary" />
+                  Create New Playlist
+                </CardTitle>
                 <CardDescription>Add a new suggested playlist for all users</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="New playlist title"
-                    value={newPlaylist}
-                    onChange={(e) => setNewPlaylist(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && createPlaylist()}
-                  />
-                  <Button onClick={createPlaylist}>Create</Button>
-                </div>
+              <CardContent className="space-y-3">
+                <Input
+                  placeholder="Playlist title"
+                  value={newPlaylist}
+                  onChange={(e) => setNewPlaylist(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createPlaylist()}
+                />
+                <Input
+                  placeholder="Description (optional)"
+                  value={newPlaylistDesc}
+                  onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && createPlaylist()}
+                />
+                <Button onClick={createPlaylist} className="w-full bg-gradient-to-r from-primary to-purple-600">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Playlist
+                </Button>
               </CardContent>
             </Card>
 
-            <div className="space-y-4">
-              {playlists.length === 0 ? (
-                <Card className={cn("backdrop-blur-xl border text-center py-12",
-                  theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-                )}>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search playlists..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Playlists List */}
+            {playlistLoading ? (
+              <Card className={cn("backdrop-blur-xl border",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardContent className="py-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading playlists...</p>
+                </CardContent>
+              </Card>
+            ) : filteredPlaylists.length === 0 ? (
+              <Card className={cn("backdrop-blur-xl border text-center py-12",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardContent>
                   <BookOpen className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-                  <p className="text-muted-foreground">No playlists yet. Create one to get started!</p>
-                </Card>
-              ) : (
-                playlists.map((p) => (
+                  <p className="text-muted-foreground">No playlists found</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {filteredPlaylists.map((p) => (
                   <Card key={p.id} className={cn("backdrop-blur-xl border",
                     theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                   )}>
-                    <CardHeader className="flex flex-row justify-between items-center">
-                      <div>
-                        <CardTitle>{p.title}</CardTitle>
-                        <CardDescription>{p.lectures.length} lecture{p.lectures.length !== 1 ? 's' : ''}</CardDescription>
+                    <CardHeader className="flex flex-row justify-between items-start">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="flex items-center gap-2 mb-2">
+                          {p.title}
+                          <Badge variant="secondary">{p.lectures.length} lectures</Badge>
+                        </CardTitle>
+                        {p.description && (
+                          <CardDescription>{p.description}</CardDescription>
+                        )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setActive(active === p.id ? null : p.id)}
+                          onClick={() => setActivePlaylistId(activePlaylistId === p.id ? null : p.id)}
                         >
-                          <Edit2 className="h-4 w-4 mr-2" />
-                          {active === p.id ? "Cancel" : "Add Lecture"}
+                          {activePlaylistId === p.id ? (
+                            <>
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel
+                            </>
+                          ) : (
+                            <>
+                              <Edit2 className="h-4 w-4 mr-2" />
+                              Add Lecture
+                            </>
+                          )}
                         </Button>
                         <Button
                           size="sm"
@@ -446,32 +594,34 @@ export default function AdminPanel() {
                       {p.lectures.length === 0 ? (
                         <p className="text-sm text-muted-foreground text-center py-4">No lectures yet</p>
                       ) : (
-                        p.lectures.map((l) => (
-                          <div
-                            key={l.id}
-                            className={cn("flex justify-between items-center p-3 rounded-lg border transition-all hover:scale-[1.01]",
-                              theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border"
-                            )}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className={cn("font-medium truncate", theme === "dark" ? "text-white" : "text-foreground")}>
-                                {l.title}
-                              </p>
-                              <p className="text-xs text-muted-foreground">Video ID: {l.videoId}</p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => removeLecture(p, l.id)}
+                        <div className="space-y-2">
+                          {p.lectures.map((l) => (
+                            <div
+                              key={l.id}
+                              className={cn("flex justify-between items-center p-3 rounded-lg border transition-all hover:scale-[1.01]",
+                                theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border"
+                              )}
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))
+                              <div className="flex-1 min-w-0">
+                                <p className={cn("font-medium truncate", theme === "dark" ? "text-white" : "text-foreground")}>
+                                  {l.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground">Video ID: {l.videoId}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                                onClick={() => removeLecture(p, l.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       )}
 
-                      {active === p.id && (
+                      {activePlaylistId === p.id && (
                         <div className={cn("flex gap-2 p-4 rounded-lg border",
                           theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border"
                         )}>
@@ -480,21 +630,26 @@ export default function AdminPanel() {
                             value={lectureTitle}
                             onChange={(e) => setLectureTitle(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addLecture(p)}
+                            className="flex-1"
                           />
                           <Input
-                            placeholder="YouTube video ID"
+                            placeholder="YouTube video ID or URL"
                             value={lectureVideo}
                             onChange={(e) => setLectureVideo(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addLecture(p)}
+                            className="flex-1"
                           />
-                          <Button onClick={() => addLecture(p)}>Add</Button>
+                          <Button onClick={() => addLecture(p)} className="bg-gradient-to-r from-primary to-purple-600">
+                            <Check className="h-4 w-4 mr-2" />
+                            Add
+                          </Button>
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           {/* Statistics Tab */}
