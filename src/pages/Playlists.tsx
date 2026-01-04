@@ -8,6 +8,8 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
+  where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,6 +64,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
@@ -100,6 +103,11 @@ import {
   HelpCircle,
   BarChart3,
   Bookmark,
+  Shield,
+  CheckCircle2,
+  AlertCircle,
+  Star,
+  Loader2,
 } from "lucide-react";
 
 /* ================= TYPES ================= */
@@ -214,7 +222,11 @@ export default function Playlists() {
   const notesSaveTimer = useRef<NodeJS.Timeout | null>(null);
 
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [active, setActive] = useState<{ pid: string; lid: string } | null>(null);
+  const [adminPlaylists, setAdminPlaylists] = useState<Playlist[]>([]);
+  const [active, setActive] = useState<{ pid: string; lid: string; isAdmin?: boolean } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingPlaylists, setLoadingPlaylists] = useState(true);
+  const [loadingAdminPlaylists, setLoadingAdminPlaylists] = useState(true);
 
   const [newPlaylist, setNewPlaylist] = useState("");
   const [newLectureTitle, setNewLectureTitle] = useState("");
@@ -345,19 +357,87 @@ export default function Playlists() {
     if (!user) return;
 
     const load = async () => {
-      const snap = await getDocs(
-        collection(db, "users", user.uid, "playlists")
-      );
-      setPlaylists(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Playlist, "id">),
-        }))
-      );
+      setError(null);
+      setLoadingPlaylists(true);
+      setLoadingAdminPlaylists(true);
+
+      try {
+        // Load user's own playlists
+        try {
+          const snap = await getDocs(
+            collection(db, "users", user.uid, "playlists")
+          );
+          setPlaylists(
+            snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<Playlist, "id">),
+            }))
+          );
+        } catch (err: any) {
+          console.error("Error loading user playlists:", err);
+          toast({
+            title: "Failed to load playlists",
+            description: err.message || "Could not load your playlists. Please try again.",
+            variant: "destructive",
+          });
+          setError("Failed to load your playlists");
+        } finally {
+          setLoadingPlaylists(false);
+        }
+
+        // Load admin playlists (public ones)
+        try {
+          const adminSnap = await getDocs(
+            query(collection(db, "playlists_global"), where("isPublic", "==", true))
+          );
+          const adminPlaylistsData = adminSnap.docs.map((d) => {
+            const data = d.data();
+            // Convert admin format to user format
+            return {
+              id: d.id,
+              title: data.title,
+              description: data.description || "",
+              lectures: (data.lectures || []).map((l: any) => ({
+                id: l.id || crypto.randomUUID(),
+                title: l.title,
+                videoId: l.videoId,
+                completed: false,
+                notes: "",
+                watchTime: 0,
+                createdAt: Date.now(),
+                tags: [],
+                timestampNotes: [],
+              })),
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().getTime() : Date.now(),
+              isFromAdmin: true,
+              adminPlaylistId: d.id,
+            } as Playlist & { isFromAdmin?: boolean; adminPlaylistId?: string };
+          });
+          setAdminPlaylists(adminPlaylistsData);
+        } catch (err: any) {
+          console.error("Error loading admin playlists:", err);
+          toast({
+            title: "Failed to load recommended playlists",
+            description: err.message || "Could not load recommended playlists.",
+            variant: "destructive",
+          });
+          setError("Failed to load recommended playlists");
+        } finally {
+          setLoadingAdminPlaylists(false);
+        }
+      } catch (err: any) {
+        console.error("Unexpected error:", err);
+        setError("An unexpected error occurred. Please refresh the page.");
+        toast({
+          title: "Error",
+          description: "Something went wrong. Please try again.",
+          variant: "destructive",
+        });
+      }
     };
 
     load();
-  }, [user]);
+  }, [user, toast]);
 
   /* ---------- CLEANUP ---------- */
   useEffect(() => {
@@ -366,17 +446,26 @@ export default function Playlists() {
     };
   }, []);
 
-  const current =
-    active &&
-    playlists
-      .find((p) => p.id === active.pid)
-      ?.lectures.find((l) => l.id === active.lid);
+  const current = active && (() => {
+    if (active.isAdmin) {
+      return adminPlaylists
+        .find((p) => p.id === active.pid)
+        ?.lectures.find((l) => l.id === active.lid);
+    } else {
+      return playlists
+        .find((p) => p.id === active.pid)
+        ?.lectures.find((l) => l.id === active.lid);
+    }
+  })();
 
   /* ---------- SYNC NOTES & AUTO-SAVE LOGIC ---------- */
   
   // Immediate Save Function
   const saveNotesImmediate = useCallback(async (lectureId: string, playlistId: string, content: string) => {
     if (!content.trim() && !isDirtyRef.current) return;
+    
+    // Don't save notes for admin playlists (read-only)
+    if (activeRef.current?.isAdmin) return;
     
     // Clear pending timer
     if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
@@ -483,41 +572,81 @@ export default function Playlists() {
   /* ---------- LOGIC ---------- */
 
   const addPlaylist = async () => {
-    if (!user || !newPlaylist.trim()) return;
+    if (!user || !newPlaylist.trim()) {
+      toast({
+        title: "Invalid input",
+        description: "Please enter a playlist name",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const ref = await addDoc(
         collection(db, "users", user.uid, "playlists"),
-        { title: newPlaylist, lectures: [] }
+        { title: newPlaylist.trim(), lectures: [], createdAt: Date.now() }
       );
 
       setPlaylists((p) => [
         ...p,
-        { id: ref.id, title: newPlaylist, lectures: [] },
+        { id: ref.id, title: newPlaylist.trim(), lectures: [], createdAt: Date.now() },
       ]);
 
       setNewPlaylist("");
-    } catch (error) {
+      toast({
+        title: "Success",
+        description: "Playlist created successfully",
+      });
+    } catch (error: any) {
       console.error("Error creating playlist:", error);
+      toast({
+        title: "Failed to create playlist",
+        description: error.message || "Could not create playlist. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const addLecture = async (p: Playlist) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to add lectures",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (p.isFromAdmin) {
+      toast({
+        title: "Read-only playlist",
+        description: "You cannot modify recommended playlists",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const vid = extractVideoId(newLectureUrl);
-    if (!vid || !newLectureTitle.trim()) return;
+    if (!vid || !newLectureTitle.trim()) {
+      toast({
+        title: "Invalid input",
+        description: "Please provide both a title and a valid YouTube URL",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const updated = [
       ...p.lectures,
       {
         id: crypto.randomUUID(),
-        title: newLectureTitle,
+        title: newLectureTitle.trim(),
         videoId: vid,
         completed: false,
         notes: "",
         watchTime: 0,
         createdAt: Date.now(),
+        tags: [],
         timestampNotes: [],
       },
     ];
@@ -534,13 +663,32 @@ export default function Playlists() {
 
       setNewLectureTitle("");
       setNewLectureUrl("");
-    } catch (error) {
+      toast({
+        title: "Success",
+        description: "Lecture added successfully",
+      });
+    } catch (error: any) {
       console.error("Error adding lecture:", error);
+      toast({
+        title: "Failed to add lecture",
+        description: error.message || "Could not add lecture. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
   const toggleComplete = async (p: Playlist, lid: string) => {
     if (!user) return;
+    
+    // Don't allow completion toggle for admin playlists
+    if (p.isFromAdmin) {
+      toast({
+        title: "Read-only playlist",
+        description: "You cannot modify recommended playlists",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const updated = p.lectures.map((l) =>
       l.id === lid ? { ...l, completed: !l.completed } : l
@@ -555,8 +703,13 @@ export default function Playlists() {
       setPlaylists((ps) =>
         ps.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error toggling completion:", error);
+      toast({
+        title: "Failed to update",
+        description: error.message || "Could not update lecture status.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -573,6 +726,12 @@ export default function Playlists() {
       const currentActive = activeRef.current;
       
       if (!currentActive || !user) {
+        setSaveStatus("idle");
+        return;
+      }
+
+      // Don't save notes for admin playlists (read-only)
+      if (currentActive.isAdmin) {
         setSaveStatus("idle");
         return;
       }
@@ -737,6 +896,17 @@ export default function Playlists() {
 
   const deletePlaylist = async (pid: string) => {
     if (!user) return;
+    
+    const playlist = playlists.find(p => p.id === pid);
+    if (playlist?.isFromAdmin) {
+      toast({
+        title: "Cannot delete",
+        description: "You cannot delete recommended playlists",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
       await deleteDoc(doc(db, "users", user.uid, "playlists", pid));
       setPlaylists((ps) => ps.filter((p) => p.id !== pid));
@@ -744,8 +914,17 @@ export default function Playlists() {
       if (active?.pid === pid) {
         setActive(null);
       }
-    } catch (error) {
+      toast({
+        title: "Success",
+        description: "Playlist deleted successfully",
+      });
+    } catch (error: any) {
       console.error("Error deleting playlist:", error);
+      toast({
+        title: "Failed to delete playlist",
+        description: error.message || "Could not delete playlist. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1666,7 +1845,182 @@ export default function Playlists() {
                   </CardContent>
                 </Card>
 
-                {filteredPlaylists.map((p) => {
+                {/* Error Alert */}
+                {error && (
+                  <Alert variant="destructive" className={cn("backdrop-blur-xl border-2",
+                    theme === "dark" ? "bg-destructive/20 border-destructive/30" : "bg-destructive/10 border-destructive"
+                  )}>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* RECOMMENDED PLAYLISTS SECTION */}
+                <div className={cn("space-y-4 mb-8 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
+                  theme === "dark" 
+                    ? "bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 border-primary/30 shadow-2xl" 
+                    : "bg-gradient-to-br from-primary/5 via-purple-500/5 to-pink-500/5 border-primary/20 shadow-xl"
+                )}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20",
+                        theme === "dark" ? "backdrop-blur-sm" : ""
+                      )}>
+                        <Sparkles className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className={cn("text-lg font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                          Recommended Playlists
+                        </h3>
+                        <p className="text-xs text-muted-foreground">Curated by administrators</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-primary/20 text-primary border-primary/30">
+                      <Shield className="h-3 w-3 mr-1" />
+                      {adminPlaylists.length}
+                    </Badge>
+                  </div>
+
+                  {loadingAdminPlaylists ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : adminPlaylists.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Star className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground">No recommended playlists available</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {adminPlaylists.map((p) => {
+                      const filteredLectures = p.lectures.filter(l => {
+                        const matchesSearch = !searchQuery || 
+                          l.title.toLowerCase().includes(searchQuery.toLowerCase());
+                        if (!matchesSearch) return false;
+                        
+                        if (filterOption === "completed") return l.completed;
+                        if (filterOption === "incomplete") return !l.completed;
+                        if (filterOption === "tagged") return (l.tags || []).length > 0;
+                        if (filterOption === "watched") return (l.watchTime || 0) > 0;
+                        return true;
+                      });
+
+                      return (
+                        <Card
+                          key={`admin-${p.id}`}
+                          className={cn("border-2 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden backdrop-blur-xl group",
+                            theme === "dark" 
+                              ? "bg-background/50 border-primary/40 hover:border-primary/60" 
+                              : "bg-background/70 border-primary/30 hover:border-primary/50",
+                            active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary shadow-2xl scale-[1.02]"
+                          )}
+                        >
+                          <CardHeader className="space-y-3 pb-3 relative">
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur-xl" />
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <CardTitle className="text-lg font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+                                    {p.title}
+                                  </CardTitle>
+                                  <Badge className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm">
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    Recommended
+                                  </Badge>
+                                </div>
+                                {p.description && (
+                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{p.description}</p>
+                                )}
+                                <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                                  <span className="flex items-center gap-1">
+                                    <Play className="h-3 w-3" />
+                                    {p.lectures.length} lectures
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                            {filteredLectures.length === 0 ? (
+                              <p className="text-xs text-muted-foreground text-center py-4">No lectures match your filters</p>
+                            ) : (
+                              <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                                {filteredLectures.map((l) => (
+                                  <button
+                                    key={l.id}
+                                    onClick={() => setActive({ pid: p.id, lid: l.id, isAdmin: true })}
+                                    className={cn(
+                                      "w-full text-left p-3 rounded-lg transition-all text-sm group/item",
+                                      theme === "dark" 
+                                        ? active?.pid === p.id && active?.lid === l.id && active?.isAdmin
+                                          ? "bg-primary/30 text-white shadow-md"
+                                          : "hover:bg-white/10 text-muted-foreground hover:text-white border border-transparent hover:border-primary/20"
+                                        : active?.pid === p.id && active?.lid === l.id && active?.isAdmin
+                                          ? "bg-primary/20 text-foreground shadow-md"
+                                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-primary/20"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {l.completed ? (
+                                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                                      ) : (
+                                        <div className="h-4 w-4 rounded-full border-2 border-current shrink-0 opacity-50 group-hover/item:opacity-100 transition-opacity" />
+                                      )}
+                                      <span className="truncate flex-1 font-medium">{l.title}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    </div>
+                  )}
+                </div>
+
+                {/* CUSTOM PLAYLISTS SECTION */}
+                <div className={cn("space-y-4 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
+                  theme === "dark" 
+                    ? "bg-gradient-to-br from-background/60 via-background/40 to-background/60 border-white/10 shadow-xl" 
+                    : "bg-gradient-to-br from-background/80 via-background/60 to-background/80 border-border shadow-lg"
+                )}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
+                        theme === "dark" ? "backdrop-blur-sm" : ""
+                      )}>
+                        <Bookmark className="h-5 w-5 text-blue-500" />
+                      </div>
+                      <div>
+                        <h3 className={cn("text-lg font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                          My Custom Playlists
+                        </h3>
+                        <p className="text-xs text-muted-foreground">Your personal playlists</p>
+                      </div>
+                    </div>
+                    {playlists.length > 0 && (
+                      <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30">
+                        {playlists.length}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {loadingPlaylists ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : playlists.length === 0 ? (
+                    <div className="text-center py-8">
+                      <BookOpen className="h-12 w-12 text-muted-foreground/30 mx-auto mb-3" />
+                      <p className="text-sm text-muted-foreground mb-2">No custom playlists yet</p>
+                      <p className="text-xs text-muted-foreground">Create your first playlist above</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredPlaylists.map((p) => {
                   const filteredLectures = filteredAndSortedLectures(p);
                   return (
                     <Card
@@ -2082,6 +2436,9 @@ export default function Playlists() {
                     </Card>
                   );
                 })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
