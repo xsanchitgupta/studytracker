@@ -51,7 +51,7 @@ const SpotlightCard = ({ children, className = "", onClick, noHover = false }: a
 };
 
 const StatCard = ({ icon: Icon, label, value, color, subtext }: any) => (
-  <SpotlightCard className="p-5 flex flex-col justify-between h-32 hover:scale-[1.02] transition-transform cursor-default">
+  <SpotlightCard className="p-3 sm:p-4 md:p-5 flex flex-col justify-between h-24 sm:h-28 md:h-32 hover:scale-[1.02] transition-transform cursor-default">
     <div className="flex justify-between items-start">
       <div className={cn("p-2.5 rounded-xl bg-gradient-to-br shadow-inner text-white", color)}>
         <Icon className="h-5 w-5" />
@@ -59,8 +59,8 @@ const StatCard = ({ icon: Icon, label, value, color, subtext }: any) => (
       {subtext && <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">{subtext}</span>}
     </div>
     <div>
-      <p className="text-2xl font-bold tracking-tight">{value}</p>
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
+      <p className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">{value}</p>
+      <p className="text-[9px] sm:text-[10px] md:text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</p>
     </div>
   </SpotlightCard>
 );
@@ -193,46 +193,46 @@ export default function Performance() {
   const totalStudyHours = (studyTime.reduce((a, b) => a + b.minutes, 0) / 60).toFixed(1);
 
   return (
-    <div className={cn("container mx-auto px-4 pb-20 animate-in fade-in duration-700 space-y-8", 
+    <div className={cn("container mx-auto px-4 pb-20 animate-in fade-in duration-700 space-y-6 sm:space-y-8", 
       theme === "dark" ? "text-white" : "text-zinc-900"
     )}>
       
       {/* HEADER */}
-      <div className="flex items-center gap-4 pt-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full hover:bg-muted">
-           <ArrowLeft className="h-5 w-5" />
+      <div className="flex items-center gap-3 sm:gap-4 pt-4 sm:pt-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full hover:bg-muted h-10 w-10 sm:h-11 sm:w-11">
+           <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
         <div>
-           <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
-             Performance <TrendingUp className="h-6 w-6 text-primary" />
+           <h1 className="text-3xl md:text-4xl xl:text-5xl font-extrabold tracking-tight flex items-center gap-2 sm:gap-3">
+             Performance <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
            </h1>
-           <p className="text-muted-foreground">Real-time learning metrics</p>
+           <p className="text-muted-foreground text-sm sm:text-base">Real-time learning metrics</p>
         </div>
       </div>
 
       {/* FOCUS SCORE HERO */}
       <SpotlightCard className="p-0 overflow-hidden border-0" noHover>
-         <div className="relative p-8 md:p-10 flex flex-col md:flex-row items-center justify-between gap-8">
+         <div className="relative p-4 sm:p-6 md:p-8 lg:p-10 flex flex-col lg:flex-row items-center justify-between gap-4 sm:gap-6 lg:gap-8">
             <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-purple-500/10 to-transparent pointer-events-none" />
             
-            <div className="flex items-center gap-8 relative z-10">
-               <div className="relative h-28 w-28 flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 lg:gap-8 relative z-10 w-full sm:w-auto">
+               <div className="relative h-20 w-20 sm:h-24 sm:w-24 lg:h-28 lg:w-28 flex items-center justify-center flex-shrink-0">
                   <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
                      <path className="text-muted/20" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" />
                      <path className="text-primary transition-all duration-1000 ease-out" strokeDasharray={`${focusScore}, 100`} d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center flex-col">
-                     <span className="text-3xl font-bold">{focusScore}</span>
-                     <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Score</span>
+                     <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{focusScore}</span>
+                     <span className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-widest">Score</span>
                   </div>
                </div>
                
-               <div>
-                  <div className="flex items-center gap-3 mb-2">
-                     <h2 className="text-3xl font-bold">Focus Score</h2>
-                     {focusScore >= 80 && <Badge className="bg-green-500/20 text-green-500 border-green-500/30 px-2 py-0.5">Excellent</Badge>}
+               <div className="text-center sm:text-left flex-1 sm:flex-initial">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2 justify-center sm:justify-start">
+                     <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold">Focus Score</h2>
+                     {focusScore >= 80 && <Badge className="bg-green-500/20 text-green-500 border-green-500/30 px-2 py-0.5 self-center sm:self-auto">Excellent</Badge>}
                   </div>
-                  <p className="text-muted-foreground max-w-md text-sm leading-relaxed">
+                  <p className="text-muted-foreground max-w-md text-sm leading-relaxed text-center sm:text-left">
                      {focusScore === 0 ? "No study data yet. Watch a lecture or use the timer to start tracking!" :
                       focusScore >= 80 ? "Top tier performance! Your consistency is impressive." : 
                       "Keep building your streak to improve this score."}
@@ -240,14 +240,14 @@ export default function Performance() {
                </div>
             </div>
 
-            <Button size="lg" className="relative z-10 rounded-full px-8 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-12" onClick={() => navigate('/goals')}>
+            <Button size="lg" className="relative z-10 rounded-full px-4 sm:px-6 lg:px-8 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-9 sm:h-10 lg:h-12 text-sm sm:text-base w-full sm:w-auto" onClick={() => navigate('/goals')}>
                <Target className="mr-2 h-4 w-4" /> View Goals
             </Button>
          </div>
       </SpotlightCard>
 
       {/* STATS GRID */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
          <StatCard icon={Brain} label="Total Cards" value={totalCards} color="from-purple-500 to-pink-500" />
          <StatCard icon={Clock} label="Study Time" value={`${totalStudyHours}h`} color="from-blue-500 to-cyan-500" subtext="Last 7 Days" />
          <StatCard icon={Flame} label="Daily Goal" value={studyTime[6]?.minutes >= 60 ? "Met" : `${studyTime[6]?.minutes}/60m`} color="from-orange-500 to-red-500" />
@@ -255,21 +255,21 @@ export default function Performance() {
       </div>
 
       {/* CHARTS GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          
          {/* STUDY VELOCITY CHART */}
-         <SpotlightCard className="p-6 md:p-8 flex flex-col" noHover>
-            <div className="flex items-center justify-between mb-6">
+         <SpotlightCard className="p-4 sm:p-6 md:p-8 flex flex-col" noHover>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><TrendingUp className="h-5 w-5" /></div>
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500"><TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" /></div>
                   <div>
-                     <h3 className="font-bold text-lg">Study Velocity</h3>
+                     <h3 className="font-bold text-base sm:text-lg">Study Velocity</h3>
                      <p className="text-xs text-muted-foreground">Daily Minutes vs Goal (60m)</p>
                   </div>
                </div>
             </div>
 
-            <div className="flex-1 min-h-[300px]">
+            <div className="flex-1 min-h-[200px] sm:min-h-[250px] lg:min-h-[300px]">
                <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={studyTime} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                      <defs>
@@ -318,15 +318,15 @@ export default function Performance() {
          </SpotlightCard>
 
          {/* RETENTION CHART */}
-         <SpotlightCard className="p-6 md:p-8 flex flex-col" noHover>
-            <div className="flex items-center justify-between mb-6">
+         <SpotlightCard className="p-4 sm:p-6 md:p-8 flex flex-col" noHover>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500"><Brain className="h-5 w-5" /></div>
-                  <h3 className="font-bold text-lg">Retention</h3>
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500"><Brain className="h-4 w-4 sm:h-5 sm:w-5" /></div>
+                  <h3 className="font-bold text-base sm:text-lg">Retention</h3>
                </div>
             </div>
             
-            <div className="flex-1 min-h-[300px] relative">
+            <div className="flex-1 min-h-[200px] sm:min-h-[250px] lg:min-h-[300px] relative">
                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                      <Pie
@@ -356,16 +356,16 @@ export default function Performance() {
                </ResponsiveContainer>
                
                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-4xl font-bold">{totalCards}</span>
-                  <span className="text-xs text-muted-foreground uppercase tracking-widest">Cards</span>
+                  <span className="text-xl sm:text-2xl lg:text-3xl md:text-4xl font-bold">{totalCards}</span>
+                  <span className="text-[9px] sm:text-[10px] md:text-xs text-muted-foreground uppercase tracking-widest">Cards</span>
                </div>
             </div>
 
-            <div className="flex justify-center gap-6 mt-4">
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 md:gap-6 mt-3 sm:mt-4">
                {flashcardStats.map((entry) => (
                   <div key={entry.name} className="flex items-center gap-2">
                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }} />
-                     <span className="text-xs font-medium text-muted-foreground">{entry.name}</span>
+                     <span className="text-[9px] sm:text-[10px] md:text-xs font-medium text-muted-foreground">{entry.name}</span>
                   </div>
                ))}
             </div>
@@ -373,13 +373,13 @@ export default function Performance() {
 
          {/* SUBJECT DISTRIBUTION */}
          {subjectData.length > 0 && (
-            <SpotlightCard className="lg:col-span-2 p-6 md:p-8" noHover>
-               <div className="flex items-center gap-2 mb-6">
-                  <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500"><Activity className="h-5 w-5" /></div>
-                  <h3 className="font-bold text-lg">Subject Breakdown</h3>
+            <SpotlightCard className="md:col-span-2 p-4 sm:p-6 md:p-8" noHover>
+               <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                  <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500"><Activity className="h-4 w-4 sm:h-5 sm:w-5" /></div>
+                  <h3 className="font-bold text-base sm:text-lg">Subject Breakdown</h3>
                </div>
                
-               <div className="h-[250px]">
+               <div className="h-[180px] sm:h-[200px] lg:h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
                      <BarChart data={subjectData} layout="vertical" margin={{ left: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} opacity={0.1} />

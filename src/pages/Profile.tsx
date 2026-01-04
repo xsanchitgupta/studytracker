@@ -392,7 +392,7 @@ export default function Profile() {
             </div>
 
             <div className="mb-4 hidden md:block">
-              <h1 className="text-3xl font-bold flex items-center gap-3">
+              <h1 className="text-3xl md:text-4xl xl:text-5xl font-bold flex items-center gap-3">
                 {profile?.name || user?.displayName || "Student"}
                 {profile?.role === "admin" && <BadgeComponent className="bg-purple-500/20 text-purple-400 border-purple-500/30">Admin</BadgeComponent>}
               </h1>

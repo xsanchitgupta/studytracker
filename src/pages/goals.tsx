@@ -212,7 +212,7 @@ export default function Goals() {
       {/* HEADER */}
       <section className="flex flex-col md:flex-row justify-between items-end gap-6 pt-4">
          <div className="space-y-2 w-full">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight flex items-center gap-3">
+            <h1 className="text-3xl md:text-4xl xl:text-5xl font-extrabold tracking-tight flex items-center gap-3">
               <Target className="h-8 w-8 text-primary" />
               Mission Control
             </h1>
@@ -221,7 +221,7 @@ export default function Goals() {
       </section>
 
       {/* STATS ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
          <StatCard icon={Target} label="Total" value={stats.total} color="from-blue-500 to-cyan-500" />
          <StatCard icon={CheckCircle2} label="Done" value={stats.completed} color="from-emerald-500 to-green-600" trend={`${stats.completed > 0 ? "+" : ""}${Math.round((stats.completed/Math.max(stats.total,1))*100)}%`} />
          <StatCard icon={AlertTriangle} label="Late" value={stats.overdue} color="from-red-500 to-pink-600" />

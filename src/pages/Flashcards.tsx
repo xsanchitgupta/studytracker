@@ -243,7 +243,7 @@ export default function Flashcards() {
                 <Brain className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-2xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                <h1 className={cn("text-2xl md:text-3xl xl:text-4xl font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
                   Flashcards
                 </h1>
                 <p className="text-xs text-muted-foreground">Spaced Repetition System • {stats.due} cards due today</p>
@@ -321,7 +321,7 @@ export default function Flashcards() {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {/* LEFT: Stats & Decks */}
           <div className="space-y-6">
             {/* STATS CARD */}
