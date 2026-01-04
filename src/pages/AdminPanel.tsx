@@ -12,6 +12,7 @@ import {
   orderBy,
   where,
   writeBatch,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,6 +78,8 @@ import {
   Globe,
   Lock,
   Unlock,
+  LogOut,
+  Send,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -161,7 +164,64 @@ export default function AdminPanel() {
   const [bulkAction, setBulkAction] = useState<string>("");
   const [showSyncDialog, setShowSyncDialog] = useState<string | null>(null);
 
-  // Load users with real-time updates
+  // Enhanced admin features
+  const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
+  const [suspendedUsers, setSuspendedUsers] = useState<Set<string>>(new Set());
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [allPlaylists, setAllPlaylists] = useState<any[]>([]);
+  const [allFlashcards, setAllFlashcards] = useState<any[]>([]);
+  const [allGoals, setAllGoals] = useState<any[]>([]);
+  const [systemLogs, setSystemLogs] = useState<any[]>([]);
+  const [featureToggles, setFeatureToggles] = useState({
+    chatEnabled: true,
+    flashcardsEnabled: true,
+    goalsEnabled: true,
+    leaderboardEnabled: true,
+    playlistsEnabled: true,
+  });
+  const [showNotificationDialog, setShowNotificationDialog] = useState(false);
+  const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState<string | null>(null);
+
+  // Load banned/suspended users
+  useEffect(() => {
+    const loadRestrictedUsers = async () => {
+      try {
+        const bannedSnap = await getDocs(query(collection(db, "users"), where("status", "==", "banned")));
+        const suspendedSnap = await getDocs(query(collection(db, "users"), where("status", "==", "suspended")));
+        
+        setBannedUsers(new Set(bannedSnap.docs.map(d => d.id)));
+        setSuspendedUsers(new Set(suspendedSnap.docs.map(d => d.id)));
+      } catch (error) {
+        console.error("Error loading restricted users:", error);
+      }
+    };
+    loadRestrictedUsers();
+  }, []);
+
+  // Load all content for moderation
+  useEffect(() => {
+    if (activeTab === "moderation") {
+      const loadAllContent = async () => {
+        try {
+          const playlistDocs: any[] = [];
+          users.forEach(async (u) => {
+            const plSnap = await getDocs(collection(db, "users", u.uid, "playlists"));
+            plSnap.forEach(pl => {
+              playlistDocs.push({ id: pl.id, owner: u.name, ...pl.data() });
+            });
+          });
+          setAllPlaylists(playlistDocs);
+        } catch (error) {
+          console.error("Error loading all content:", error);
+        }
+      };
+      loadAllContent();
+    }
+  }, [activeTab, users]);
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(
@@ -340,6 +400,206 @@ export default function AdminPanel() {
     } catch (error) {
       console.error("Error bulk updating users:", error);
       toast.error("Failed to update users");
+    }
+  };
+
+  // === ENHANCED ADMIN FEATURES ===
+
+  // Ban/Unban User
+  const toggleUserBan = async (userId: string, isBanned: boolean) => {
+    if (userId === currentUser?.uid) {
+      toast.error("You cannot ban yourself");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        status: isBanned ? "active" : "banned",
+        bannedAt: isBanned ? null : serverTimestamp(),
+        bannedBy: isBanned ? null : currentUser?.uid
+      });
+
+      toast.success(`User ${isBanned ? "unbanned" : "banned"} successfully`);
+      if (isBanned) {
+        setBannedUsers(prev => new Set([...prev].filter(id => id !== userId)));
+      } else {
+        setBannedUsers(prev => new Set([...prev, userId]));
+      }
+    } catch (error) {
+      console.error("Error toggling ban:", error);
+      toast.error("Failed to update ban status");
+    }
+  };
+
+  // Suspend/Unsuspend User
+  const toggleUserSuspend = async (userId: string, isSuspended: boolean) => {
+    if (userId === currentUser?.uid) {
+      toast.error("You cannot suspend yourself");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        status: isSuspended ? "active" : "suspended",
+        suspendedAt: isSuspended ? null : serverTimestamp(),
+        suspendedUntil: isSuspended ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        suspendedBy: isSuspended ? null : currentUser?.uid
+      });
+
+      toast.success(`User ${isSuspended ? "unsuspended" : "suspended"} successfully`);
+      if (isSuspended) {
+        setSuspendedUsers(prev => new Set([...prev].filter(id => id !== userId)));
+      } else {
+        setSuspendedUsers(prev => new Set([...prev, userId]));
+      }
+    } catch (error) {
+      console.error("Error toggling suspend:", error);
+      toast.error("Failed to update suspend status");
+    }
+  };
+
+  // Send Notification to Users
+  const sendNotification = async () => {
+    if (!notificationTitle.trim() || !notificationMessage.trim()) {
+      toast.error("Please fill in both title and message");
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const timestamp = new Date();
+
+      users.forEach(user => {
+        batch.set(doc(db, "users", user.uid, "notifications", crypto.randomUUID()), {
+          title: notificationTitle,
+          message: notificationMessage,
+          type: "system",
+          read: false,
+          createdAt: timestamp,
+          createdBy: currentUser?.uid
+        });
+      });
+
+      await batch.commit();
+      toast.success(`Notification sent to ${users.length} user(s)`);
+      setNotificationTitle("");
+      setNotificationMessage("");
+      setShowNotificationDialog(false);
+    } catch (error) {
+      console.error("Error sending notification:", error);
+      toast.error("Failed to send notification");
+    }
+  };
+
+  // Toggle Feature
+  const toggleFeature = async (featureName: keyof typeof featureToggles) => {
+    try {
+      const newState = !featureToggles[featureName];
+      setFeatureToggles(prev => ({
+        ...prev,
+        [featureName]: newState
+      }));
+
+      await updateDoc(doc(db, "system_config", "features"), {
+        [featureName]: newState,
+        lastModified: serverTimestamp(),
+        modifiedBy: currentUser?.uid
+      });
+
+      toast.success(`Feature ${newState ? "enabled" : "disabled"}`);
+    } catch (error) {
+      console.error("Error toggling feature:", error);
+      toast.error("Failed to update feature");
+    }
+  };
+
+  // Export System Data
+  const exportSystemData = async () => {
+    setExportLoading(true);
+    try {
+      const data = {
+        exportDate: new Date().toISOString(),
+        statistics: systemStats,
+        users: users.map(u => ({
+          uid: u.uid,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          createdAt: u.createdAt,
+          lastSignIn: u.lastSignInAt,
+          isActive: u.isActive,
+          playlistsCount: u.playlistsCount,
+          totalWatchTime: u.totalWatchTime
+        })),
+        playlists: playlists.map(p => ({
+          id: p.id,
+          title: p.title,
+          lecturesCount: p.lectures.length,
+          isPublic: p.isPublic,
+          syncedToUsers: p.syncedToUsers,
+          createdAt: p.createdAt
+        }))
+      };
+
+      const dataStr = JSON.stringify(data, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `system-export-${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+
+      toast.success("System data exported successfully");
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      toast.error("Failed to export data");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Clear User Cache (Logout all users from all sessions)
+  const clearAllUserSessions = async () => {
+    if (!confirm("This will log out all users from all sessions. Are you sure?")) return;
+
+    try {
+      const batch = writeBatch(db);
+      users.forEach(user => {
+        batch.update(doc(db, "users", user.uid), {
+          lastSessionClear: serverTimestamp()
+        });
+      });
+      await batch.commit();
+      toast.success("All user sessions cleared");
+    } catch (error) {
+      console.error("Error clearing sessions:", error);
+      toast.error("Failed to clear sessions");
+    }
+  };
+
+  // View User Details
+  const getUserDetails = async (userId: string) => {
+    try {
+      const userRef = doc(db, "users", userId);
+      const userSnap = await getDocs(userRef as any);
+      
+      const logsSnap = await getDocs(collection(db, "users", userId, "study_logs"));
+      const plSnap = await getDocs(collection(db, "users", userId, "playlists"));
+      const goalsSnap = await getDocs(collection(db, "users", userId, "goals"));
+      const flashcardsSnap = await getDocs(collection(db, "users", userId, "flashcards"));
+
+      return {
+        user: users.find(u => u.uid === userId),
+        studyLogs: logsSnap.size,
+        playlists: plSnap.size,
+        goals: goalsSnap.size,
+        flashcards: flashcardsSnap.size,
+        totalRecords: logsSnap.size + plSnap.size + goalsSnap.size + flashcardsSnap.size
+      };
+    } catch (error) {
+      console.error("Error fetching user details:", error);
+      toast.error("Failed to fetch user details");
+      return null;
     }
   };
 
@@ -625,7 +885,7 @@ export default function AdminPanel() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={cn("grid w-full grid-cols-6",
+          <TabsList className={cn("grid w-full grid-cols-9 overflow-x-auto",
             theme === "dark" ? "bg-background/40" : "bg-background/60"
           )}>
             <TabsTrigger value="overview" className="flex items-center gap-2">
@@ -642,6 +902,15 @@ export default function AdminPanel() {
             </TabsTrigger>
             <TabsTrigger value="sync" className="flex items-center gap-2">
               <Globe className="h-4 w-4" /> Sync
+            </TabsTrigger>
+            <TabsTrigger value="moderation" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" /> Moderation
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell className="h-4 w-4" /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="system" className="flex items-center gap-2">
+              <Zap className="h-4 w-4" /> System
             </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" /> Settings
@@ -1273,6 +1542,239 @@ export default function AdminPanel() {
                     ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Moderation Tab - Manage User Restrictions */}
+          <TabsContent value="moderation" className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatCard icon={Ban} label="Banned Users" value={bannedUsers.size} color="from-red-500 to-rose-500" />
+              <StatCard icon={AlertCircle} label="Suspended" value={suspendedUsers.size} color="from-orange-500 to-amber-500" />
+              <StatCard icon={Shield} label="Total Moderated" value={bannedUsers.size + suspendedUsers.size} color="from-purple-500 to-pink-500" />
+              <StatCard icon={Users} label="Active Users" value={users.filter(u => !bannedUsers.has(u.uid) && !suspendedUsers.has(u.uid)).length} color="from-green-500 to-emerald-500" />
+            </div>
+
+            <Card className={cn("backdrop-blur-xl border",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  User Moderation
+                </CardTitle>
+                <CardDescription>Ban or suspend users who violate community guidelines</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  {users.map(user => (
+                    <div key={user.uid} className={cn("p-3 rounded-lg border flex items-center justify-between",
+                      theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/50 border-border"
+                    )}>
+                      <div className="flex items-center gap-3 flex-1">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={user.photoURL || ""} />
+                          <AvatarFallback>{user.name?.[0] || "?"}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold truncate">{user.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {bannedUsers.has(user.uid) && (
+                          <Badge className="bg-red-500/20 text-red-500 border-red-500/30">
+                            <Ban className="h-3 w-3 mr-1" /> Banned
+                          </Badge>
+                        )}
+                        {suspendedUsers.has(user.uid) && (
+                          <Badge className="bg-orange-500/20 text-orange-500 border-orange-500/30">
+                            <AlertCircle className="h-3 w-3 mr-1" /> Suspended
+                          </Badge>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => toggleUserBan(user.uid, bannedUsers.has(user.uid))}>
+                              {bannedUsers.has(user.uid) ? <Unlock className="h-4 w-4 mr-2" /> : <Ban className="h-4 w-4 mr-2" />}
+                              {bannedUsers.has(user.uid) ? "Unban" : "Ban"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleUserSuspend(user.uid, suspendedUsers.has(user.uid))}>
+                              {suspendedUsers.has(user.uid) ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <AlertCircle className="h-4 w-4 mr-2" />}
+                              {suspendedUsers.has(user.uid) ? "Unsuspend" : "Suspend"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setSelectedUserForDetails(user.uid)}>
+                              <Eye className="h-4 w-4 mr-2" /> View Details
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Notifications Tab */}
+          <TabsContent value="notifications" className="space-y-6">
+            <Card className={cn("backdrop-blur-xl border",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-primary" />
+                  Send System Notification
+                </CardTitle>
+                <CardDescription>Send a notification to all users</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="notification-title">Notification Title</Label>
+                  <Input
+                    id="notification-title"
+                    placeholder="e.g., System Maintenance"
+                    value={notificationTitle}
+                    onChange={(e) => setNotificationTitle(e.target.value)}
+                    className={theme === "dark" ? "bg-white/5 border-white/10" : ""}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="notification-message">Message</Label>
+                  <Textarea
+                    id="notification-message"
+                    placeholder="Enter your notification message..."
+                    value={notificationMessage}
+                    onChange={(e) => setNotificationMessage(e.target.value)}
+                    rows={4}
+                    className={theme === "dark" ? "bg-white/5 border-white/10" : ""}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={sendNotification} className="flex-1" size="lg">
+                    <Send className="h-4 w-4 mr-2" /> Send to All Users ({users.length})
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowNotificationDialog(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={cn("backdrop-blur-xl border",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Notification History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Notification history coming soon...</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* System Tab - Database & Features */}
+          <TabsContent value="system" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Feature Toggles */}
+              <Card className={cn("backdrop-blur-xl border",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-primary" />
+                    Feature Toggles
+                  </CardTitle>
+                  <CardDescription>Enable or disable platform features</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {Object.entries(featureToggles).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <Label className="capitalize">{key.replace(/([A-Z])/g, " $1").trim()}</Label>
+                      <Switch
+                        checked={value}
+                        onCheckedChange={() => toggleFeature(key as keyof typeof featureToggles)}
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* System Actions */}
+              <Card className={cn("backdrop-blur-xl border",
+                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+              )}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-primary" />
+                    System Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button onClick={exportSystemData} disabled={exportLoading} className="w-full justify-start" variant="outline">
+                    {exportLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export System Data
+                      </>
+                    )}
+                  </Button>
+                  <Button onClick={clearAllUserSessions} className="w-full justify-start" variant="outline">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Clear All Sessions
+                  </Button>
+                  <Button className="w-full justify-start" variant="destructive">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Clear System Cache
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Database Statistics */}
+            <Card className={cn("backdrop-blur-xl border",
+              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+            )}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-5 w-5 text-primary" />
+                  Database Statistics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Total Users</p>
+                    <p className="text-2xl font-bold">{users.length}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Total Playlists</p>
+                    <p className="text-2xl font-bold">{playlists.length}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Total Lectures</p>
+                    <p className="text-2xl font-bold">{systemStats.totalLectures}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-sm text-muted-foreground">Collections</p>
+                    <p className="text-2xl font-bold">8+</p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
