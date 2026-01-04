@@ -1301,7 +1301,7 @@ export default function Playlists() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100/20 via-background to-background dark:from-indigo-950/20 dark:via-background dark:to-background transition-colors duration-500">
+      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100/20 via-background to-background dark:from-indigo-950/20 dark:via-background dark:to-background transition-colors duration-500 animate-in fade-in duration-700">
         {/* MAIN */}
         <main className="container mx-auto px-4 py-6 max-w-[1800px]">
           <div className={`grid gap-6 ${focusMode ? "grid-cols-1" : "lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)]"}`}>
@@ -1425,7 +1425,7 @@ export default function Playlists() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {adminPlaylists.map((p) => {
+                      {adminPlaylists.map((p, i) => {
                         const filteredLectures = p.lectures.filter(l => {
                           const matchesSearch = !searchQuery ||
                             l.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1441,7 +1441,8 @@ export default function Playlists() {
                         return (
                           <Card
                             key={`admin-${p.id}`}
-                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl group ring-1 ring-border/50",
+                            style={{ animationDelay: `${i * 100}ms` }}
+                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl group ring-1 ring-border/50 animate-in slide-in-from-left-4 fade-in duration-500",
                               theme === "dark"
                                 ? "bg-background/40 hover:bg-background/60"
                                 : "bg-white/60 hover:bg-white/80",
@@ -1552,12 +1553,13 @@ export default function Playlists() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {playlists.map((p) => {
+                      {playlists.map((p, i) => {
                         const filteredLectures = filteredAndSortedLectures(p);
                         return (
                           <Card
                             key={p.id}
-                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl ring-1 ring-border/50",
+                            style={{ animationDelay: `${(i + adminPlaylists.length) * 100}ms` }}
+                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl ring-1 ring-border/50 animate-in slide-in-from-left-4 fade-in duration-500",
                               theme === "dark" ? "bg-background/40 hover:bg-background/60" : "bg-white/60 hover:bg-white/80",
                               active?.pid === p.id && !active?.isAdmin && "ring-2 ring-primary/50 shadow-lg shadow-primary/10 scale-[1.01]"
                             )}
@@ -1947,14 +1949,15 @@ export default function Playlists() {
             )}
 
             {/* PLAYER + NOTES */}
-            <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-6"}`)}>
+            <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-6"} transition-all duration-500 ease-in-out`)}>
               <Card className={cn(`shadow-2xl border-0 ring-1 ring-white/10 backdrop-blur-xl transition-all duration-500 overflow-hidden`,
                 theme === "dark" ? "bg-background/60" : "bg-white/70",
                 theatre ? "h-full flex flex-col" : ""
               )}>
                 {current ? (
                   <>
-                    <div className={cn(`aspect-video bg-black ${theatre ? "flex-1 min-h-0" : ""} overflow-hidden relative group`)}>
+                    <div className={cn("w-full transition-all duration-500", !theatre && "p-4 pb-0")}>
+                      <div className={cn(`mx-auto ${theatre ? "h-full w-full" : "max-w-4xl rounded-xl shadow-2xl ring-1 ring-white/10"} aspect-video bg-black overflow-hidden relative group transition-all duration-500`)}>
                       {/* Blur effect behind video */}
                       <div className={cn("absolute inset-0 -z-10 blur-3xl opacity-30 transition-opacity",
                         theme === "dark" ? "bg-gradient-to-br from-primary/40 via-purple-500/40 to-pink-500/40" : "bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20"
@@ -1968,13 +1971,13 @@ export default function Playlists() {
                       <iframe
                         ref={iframeRef}
                         src={`https://www.youtube.com/embed/${current.videoId}`}
-                        className="w-full h-full relative z-10 shadow-2xl"
+                        className="w-full h-full relative z-10"
                         allowFullScreen
                         onLoad={() => (watchStartRef.current = Date.now())}
                       />
                       {/* TIMER OVERLAY */}
                       {timerActive && (
-                        <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm border-2 rounded-lg p-3 shadow-lg">
+                        <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm border-2 rounded-lg p-3 shadow-lg z-20 animate-in fade-in zoom-in duration-300">
                           <div className="flex items-center gap-3">
                             <div className="text-center">
                               <p className="text-xs text-muted-foreground">{timerMode === "pomodoro" ? "Study" : "Break"}</p>
@@ -2000,8 +2003,9 @@ export default function Playlists() {
                         </div>
                       )}
                     </div>
+                    </div>
 
-                    <CardContent className="space-y-5 p-6">
+                    <CardContent className="space-y-5 p-6 max-w-5xl mx-auto w-full">
                       <div className="flex justify-between items-start gap-4">
                         <h2 className="text-2xl font-bold leading-tight flex-1 tracking-tight">{current.title}</h2>
                         <div className="flex gap-2">
@@ -2331,7 +2335,7 @@ area = πr²`}
 
                         {nextLecture ? (
                           <div
-                            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-accent/50 transition-all cursor-pointer group relative overflow-hidden"
+                            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-accent/50 transition-all cursor-pointer group relative overflow-hidden hover:scale-[1.02] active:scale-[0.98] duration-200"
                             onClick={goNext}
                           >
                             <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
