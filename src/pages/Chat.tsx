@@ -109,7 +109,8 @@ const formatName = (user: { displayName?: string | null, email?: string | null }
 
 const COMMON_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🚀", "👀"];
 
-const CHANNELS: ChatSession[] = [
+// Default channels to create if none exist
+const DEFAULT_CHANNELS: ChatSession[] = [
   { id: "channel_general", type: "channel", name: "general", description: "General discussion", color: "text-blue-400" },
   { id: "channel_homework", type: "channel", name: "homework-help", description: "Solve problems together", color: "text-emerald-400" },
   { id: "channel_resources", type: "channel", name: "resources", description: "Notes, links & PDFs", color: "text-orange-400" },
@@ -141,7 +142,9 @@ export default function Chat() {
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
 
   // Data State
-  const [activeChat, setActiveChat] = useState<ChatSession>(CHANNELS[0]);
+  const [channels, setChannels] = useState<ChatSession[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<UserStatus[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -175,6 +178,66 @@ export default function Chat() {
   const mentionRef = useRef<HTMLDivElement>(null);
 
   // --- Effects ---
+
+  // 0. Load Channels from Firebase
+  useEffect(() => {
+    if (!user) return;
+
+    setLoadingChannels(true);
+    let isMounted = true;
+
+    const loadChannels = async () => {
+      try {
+        // Check if channels collection exists and has data
+        const snap = await getDocs(collection(db, "channels"));
+        
+        if (snap.empty) {
+          // Create default channels if none exist
+          for (const channel of DEFAULT_CHANNELS) {
+            await setDoc(doc(db, "channels", channel.id), {
+              name: channel.name,
+              description: channel.description,
+              type: "channel",
+              createdAt: serverTimestamp(),
+            }).catch(err => console.error("Error creating default channel:", err));
+          }
+          if (isMounted) {
+            setChannels(DEFAULT_CHANNELS);
+            setActiveChat(DEFAULT_CHANNELS[0]);
+          }
+        } else {
+          // Load existing channels
+          const loadedChannels = snap.docs.map(doc => ({
+            id: doc.id,
+            type: "channel" as ChatType,
+            name: doc.data().name || "Untitled",
+            description: doc.data().description || "",
+            color: doc.data().color || "text-blue-400",
+          }));
+          if (isMounted) {
+            setChannels(loadedChannels);
+            setActiveChat(loadedChannels[0] || null);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading channels:", error);
+        if (isMounted) {
+          setChannels(DEFAULT_CHANNELS);
+          setActiveChat(DEFAULT_CHANNELS[0]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingChannels(false);
+        }
+      }
+    };
+
+    loadChannels();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   // 1. Fetch Users
   useEffect(() => {
@@ -413,7 +476,10 @@ export default function Chat() {
   };
 
   const handleSendMessage = useCallback(async () => {
-    if ((!text.trim() && !imageFile) || !user) return;
+    if ((!text.trim() && !imageFile) || !user || !activeChat) {
+      if (!activeChat) toast.error("Please select a channel first");
+      return;
+    }
 
     if (editingMessage) {
       await updateDoc(doc(db, "chats", activeChat.id, "messages", editingMessage.id), {
@@ -821,7 +887,8 @@ export default function Chat() {
           <div className="mb-8">
              {!collapsed && <h3 className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest mb-3 px-2">Lounge</h3>}
              <div className="space-y-1">
-               {CHANNELS.map(channel => (
+               {loadingChannels && !collapsed && <p className="text-xs text-muted-foreground px-3 py-2">Loading channels...</p>}
+               {channels.map(channel => (
                  <TooltipProvider key={channel.id} delayDuration={0}>
                    <Tooltip>
                      <TooltipTrigger asChild>
@@ -830,14 +897,14 @@ export default function Chat() {
                          className={cn(
                            "w-full flex items-center rounded-xl transition-all duration-300 group hover:bg-white/5 relative overflow-hidden",
                            collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5",
-                           activeChat.id === channel.id ? "bg-primary/10 text-primary shadow-[inset_0_0_15px_rgba(var(--primary),0.1)] border border-primary/20" : "text-muted-foreground"
+                           activeChat?.id === channel.id ? "bg-primary/10 text-primary shadow-[inset_0_0_15px_rgba(var(--primary),0.1)] border border-primary/20" : "text-muted-foreground"
                          )}
                        >
-                         <div className={cn("p-1.5 rounded-lg transition-colors shrink-0", activeChat.id === channel.id ? "bg-primary/20 text-primary" : "bg-white/5 text-muted-foreground group-hover:bg-white/10")}>
+                         <div className={cn("p-1.5 rounded-lg transition-colors shrink-0", activeChat?.id === channel.id ? "bg-primary/20 text-primary" : "bg-white/5 text-muted-foreground group-hover:bg-white/10")}>
                             <Hash className="h-4 w-4" />
                          </div>
                          {!collapsed && <span className="truncate text-sm font-medium">{channel.name}</span>}
-                         {activeChat.id === channel.id && !collapsed && <div className="absolute right-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_10px_var(--primary)]" />}
+                         {activeChat?.id === channel.id && !collapsed && <div className="absolute right-0 top-0 bottom-0 w-1 bg-primary shadow-[0_0_10px_var(--primary)]" />}
                        </button>
                      </TooltipTrigger>
                      {collapsed && <TooltipContent side="right"><p>{channel.name}</p></TooltipContent>}
@@ -1010,6 +1077,20 @@ export default function Chat() {
       </Sheet>
 
       <main className="flex-1 flex flex-col min-w-0 bg-transparent relative">
+        {/* No Chat Selected State */}
+        {!activeChat && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-6">
+            <div className="text-center space-y-2">
+              <Hash className="h-16 w-16 text-muted-foreground/30 mx-auto" />
+              <h2 className="text-2xl font-bold text-muted-foreground">Select a channel</h2>
+              <p className="text-muted-foreground max-w-sm">Choose a channel from the sidebar to start chatting</p>
+            </div>
+          </div>
+        )}
+
+        {/* Chat Interface */}
+        {activeChat && (
+        <>
         {/* Header */}
         <header className={cn("h-16 px-6 flex items-center justify-between border-b backdrop-blur-x1 z-10 shadow-lg",
           theme === "dark" ? "border-white/5 bg-background/30" : "border-border bg-background/80"
@@ -1403,6 +1484,8 @@ export default function Chat() {
               </div>
            </div>
         </div>
+        </>
+        )}
       </main>
 
       {membersOpen && (
@@ -1513,7 +1596,7 @@ export default function Chat() {
              <p className="text-sm text-muted-foreground">Select a destination:</p>
              <ScrollArea className="h-[300px] pr-4">
                <div className="space-y-2">
-                 {CHANNELS.map(c => (
+                 {channels.map(c => (
                    <Button key={c.id} variant="outline" className={cn("w-full justify-start gap-3 h-12 rounded-xl",
                      theme === "dark" ? "border-white/10 hover:bg-white/10 hover:text-white bg-transparent" : "border-border hover:bg-muted"
                    )} onClick={() => confirmForward(c)}>

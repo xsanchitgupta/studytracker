@@ -46,20 +46,14 @@ type Deck = {
   color: string;
 };
 
-/* --- MOCK DATA --- */
-const DEFAULT_DECKS: Deck[] = [
-  { id: "general", name: "General Knowledge", color: "bg-blue-500" },
-  { id: "math", name: "Mathematics", color: "bg-red-500" },
-  { id: "cs", name: "Computer Science", color: "bg-green-500" },
-];
-
 export default function Flashcards() {
   const { user } = useAuth();
   const navigate = useNavigate();
   
   // Data State
   const [cards, setCards] = useState<Flashcard[]>([]);
-  const [decks, setDecks] = useState<Deck[]>(DEFAULT_DECKS);
+  const [decks, setDecks] = useState<Deck[]>([]);
+  const [loadingDecks, setLoadingDecks] = useState(false);
   
   const { theme } = useTheme();
   
@@ -71,10 +65,66 @@ export default function Flashcards() {
   // Creation State
   const [newCardFront, setNewCardFront] = useState("");
   const [newCardBack, setNewCardBack] = useState("");
-  const [newCardDeck, setNewCardDeck] = useState("general");
+  const [newCardDeck, setNewCardDeck] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newDeckName, setNewDeckName] = useState("");
+  const [showNewDeckDialog, setShowNewDeckDialog] = useState(false);
 
-  // --- FIREBASE SYNC ---
+  // --- FIREBASE SYNC: Fetch Decks from Firebase ---
+  useEffect(() => {
+    if (!user) {
+      setDecks([]);
+      setLoadingDecks(false);
+      return;
+    }
+
+    setLoadingDecks(true);
+    let unsub: (() => void) | undefined;
+
+    try {
+      const q = query(collection(db, "users", user.uid, "flashcardDecks"));
+      unsub = onSnapshot(
+        q,
+        (snap) => {
+          try {
+            const decksData = snap.docs.map(d => ({
+              id: d.id,
+              name: d.data().name || "Untitled Deck",
+              color: d.data().color || "bg-blue-500",
+            })) as Deck[];
+            setDecks(decksData);
+            setLoadingDecks(false);
+            
+            // Set first deck as active if not set
+            if (decksData.length > 0 && newCardDeck === "") {
+              setNewCardDeck(decksData[0].id);
+              setActiveDeckId(decksData[0].id);
+            }
+          } catch (error) {
+            console.error("Error processing decks:", error);
+            setLoadingDecks(false);
+          }
+        },
+        (error) => {
+          console.error("Firebase decks snapshot error:", error);
+          setLoadingDecks(false);
+          if (error.code === 'permission-denied') {
+            toast.error("Permission denied. Please check your access.");
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error setting up decks listener:", error);
+      setDecks([]);
+      setLoadingDecks(false);
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [user, toast]);
+
+  // --- FIREBASE SYNC: Fetch Cards ---
   useEffect(() => {
     if (!user) {
       setCards([]);
@@ -95,7 +145,7 @@ export default function Flashcards() {
                 id: d.id,
                 front: raw.front || "",
                 back: raw.back || "",
-                deckId: raw.deckId || "general",
+                deckId: raw.deckId || "",
                 createdAt: raw.createdAt || Date.now(),
                 srs: raw.srs || INITIAL_CARD_DATA 
               } as Flashcard;
@@ -103,12 +153,10 @@ export default function Flashcards() {
             setCards(data);
           } catch (error) {
             console.error("Error processing flashcards:", error);
-            // Don't show toast on every error, just log it
           }
         },
         (error) => {
           console.error("Firebase snapshot error:", error);
-          // Only show error if it's a permission error or critical
           if (error.code === 'permission-denied') {
             toast.error("Permission denied. Please check your access.");
           }
@@ -116,7 +164,6 @@ export default function Flashcards() {
       );
     } catch (error) {
       console.error("Error setting up flashcards listener:", error);
-      // Don't show toast, just set empty cards
       setCards([]);
     }
     
@@ -125,10 +172,38 @@ export default function Flashcards() {
     };
   }, [user, toast]);
 
+  // --- ACTIONS: Create New Deck ---
+  const addDeck = async () => {
+    if (!user || !newDeckName.trim()) {
+      toast.error("Please enter a deck name");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "users", user.uid, "flashcardDecks"), {
+        name: newDeckName,
+        color: "bg-blue-500",
+        createdAt: Date.now(),
+      });
+
+      setNewDeckName("");
+      setShowNewDeckDialog(false);
+      toast.success("Deck created!");
+    } catch (error) {
+      console.error("Error creating deck:", error);
+      toast.error("Failed to create deck");
+    }
+  };
+
   // --- ACTIONS ---
   const addCard = async () => {
     if (!user || !newCardFront.trim() || !newCardBack.trim()) {
       toast.error("Please fill in both front and back of the card");
+      return;
+    }
+    
+    if (!newCardDeck) {
+      toast.error("Please select a deck");
       return;
     }
     
@@ -368,10 +443,35 @@ export default function Flashcards() {
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-primary" />
-                  Your Decks
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Layers className="h-5 w-5 text-primary" />
+                    Your Decks
+                  </CardTitle>
+                  <Dialog open={showNewDeckDialog} onOpenChange={setShowNewDeckDialog}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create New Deck</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-sm font-medium">Deck Name</label>
+                          <Input 
+                            placeholder="e.g., Biology Basics"
+                            value={newDeckName}
+                            onChange={(e) => setNewDeckName(e.target.value)}
+                          />
+                        </div>
+                        <Button onClick={addDeck} className="w-full">Create Deck</Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 <button 
@@ -385,6 +485,10 @@ export default function Flashcards() {
                   <span className="flex items-center gap-2"><Layers className="h-4 w-4" /> All Cards</span>
                   <Badge variant="secondary" className="bg-background/20 hover:bg-background/30 text-current">{cards.length}</Badge>
                 </button>
+                {loadingDecks && <p className="text-sm text-muted-foreground">Loading decks...</p>}
+                {!loadingDecks && decks.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic">No decks yet. Create one to get started!</p>
+                )}
                 {decks.map(deck => {
                   const count = cards.filter(c => c.deckId === deck.id).length;
                   return (
