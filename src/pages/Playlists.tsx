@@ -1301,33 +1301,34 @@ export default function Playlists() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-indigo-900/5 dark:to-indigo-950/10">
+      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-100/20 via-background to-background dark:from-indigo-950/20 dark:via-background dark:to-background transition-colors duration-500">
         {/* MAIN */}
-        <main className="container mx-auto px-4 py-8 max-w-7xl">
-          <div className={`grid gap-8 ${focusMode ? "grid-cols-1" : "lg:grid-cols-[380px_minmax(0,1fr)]"}`}>
+        <main className="container mx-auto px-4 py-6 max-w-[1800px]">
+          <div className={`grid gap-6 ${focusMode ? "grid-cols-1" : "lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[400px_minmax(0,1fr)]"}`}>
             {/* SIDEBAR */}
             {!focusMode && (
-              <div className={cn("space-y-4 lg:sticky lg:top-24 lg:h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pb-4",
-                "scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
+              <div className={cn("space-y-6 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-2 pb-10",
+                "scrollbar-thin scrollbar-thumb-primary/10 hover:scrollbar-thumb-primary/20 scrollbar-track-transparent transition-colors"
               )}>
                 {/* SEARCH & FILTER */}
-                <Card className={cn("border-2 shadow-lg backdrop-blur-x1 transition-all duration-300",
-                  theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-                )}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <div className="space-y-4">
+                  <div className="relative group z-10">
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <Card className="relative border-0 shadow-sm bg-background/60 backdrop-blur-xl ring-1 ring-border/50 overflow-hidden">
+                      <CardContent className="p-3 space-y-3">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                       <Input
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search lectures..."
-                        className="pl-9"
+                        className="pl-9 bg-muted/30 border-transparent focus:bg-background focus:border-primary/20 focus:ring-2 focus:ring-primary/10 transition-all h-10"
                       />
                     </div>
                     <div className="flex gap-2">
                       <Select value={filterOption} onValueChange={(v) => setFilterOption(v as FilterOption)}>
-                        <SelectTrigger className="flex-1">
-                          <Filter className="h-4 w-4 mr-2" />
+                        <SelectTrigger className="flex-1 h-9 bg-muted/30 border-transparent hover:bg-muted/50 focus:ring-primary/10 text-xs">
+                          <Filter className="h-3.5 w-3.5 mr-2 opacity-70" />
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1339,7 +1340,7 @@ export default function Playlists() {
                         </SelectContent>
                       </Select>
                       <Select value={sortOption} onValueChange={(v) => setSortOption(v as SortOption)}>
-                        <SelectTrigger className="flex-1">
+                        <SelectTrigger className="flex-1 h-9 bg-muted/30 border-transparent hover:bg-muted/50 focus:ring-primary/10 text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1353,30 +1354,32 @@ export default function Playlists() {
                     </div>
                   </CardContent>
                 </Card>
+                  </div>
 
-                <Card className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-x1",
-                  theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
-                )}>
-                  <CardContent className="flex gap-2 p-4">
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1 group">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <Input
                       value={newPlaylist}
                       onChange={(e) => setNewPlaylist(e.target.value)}
-                      placeholder="Create playlist"
-                      className="flex-1"
+                      placeholder="New playlist name..."
+                      className="relative bg-background/60 backdrop-blur-xl border-border/50 focus:border-primary/30 focus:ring-2 focus:ring-primary/10 h-10 transition-all"
                       onKeyDown={(e) => e.key === "Enter" && addPlaylist()}
                     />
+                    </div>
                     <Button
                       onClick={addPlaylist}
-                      className="shrink-0"
+                      className="shrink-0 h-10 w-10 rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-105 transition-all"
+                      size="icon"
                     >
-                      <Plus className="h-4 w-4" />
+                      <Plus className="h-5 w-5" />
                     </Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
                 {/* Error Alert */}
                 {error && (
-                  <Alert variant="destructive" className={cn("backdrop-blur-x1 border-2",
+                  <Alert variant="destructive" className={cn("backdrop-blur-xl border-0 ring-1 ring-destructive/30 shadow-lg",
                     theme === "dark" ? "bg-destructive/20 border-destructive/30" : "bg-destructive/10 border-destructive"
                   )}>
                     <AlertCircle className="h-4 w-4" />
@@ -1386,26 +1389,26 @@ export default function Playlists() {
                 )}
 
                 {/* RECOMMENDED PLAYLISTS SECTION */}
-                <div className={cn("space-y-4 mb-8 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
+                <div className={cn("space-y-4 mb-8 p-1 rounded-3xl transition-all duration-300",
                   theme === "dark"
-                    ? "bg-gradient-to-br from-primary/10 via-purple-500/10 to-pink-500/10 border-primary/30 shadow-2xl"
-                    : "bg-gradient-to-br from-primary/5 via-purple-500/5 to-pink-500/5 border-primary/20 shadow-xl"
+                    ? "bg-gradient-to-b from-white/5 to-transparent"
+                    : "bg-gradient-to-b from-black/5 to-transparent"
                 )}>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4 px-2">
                     <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-xl bg-gradient-to-br from-primary/20 to-purple-500/20",
+                      <div className={cn("p-2.5 rounded-2xl bg-gradient-to-br from-primary/20 to-purple-500/20 shadow-inner",
                         theme === "dark" ? "backdrop-blur-sm" : ""
                       )}>
                         <Sparkles className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <h3 className={cn("text-lg font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                        <h3 className={cn("text-base font-bold tracking-tight", theme === "dark" ? "text-white" : "text-foreground")}>
                           Recommended Playlists
                         </h3>
                         <p className="text-xs text-muted-foreground">Curated by administrators</p>
                       </div>
                     </div>
-                    <Badge className="bg-primary/20 text-primary border-primary/30">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary border-0">
                       <Shield className="h-3 w-3 mr-1" />
                       {adminPlaylists.length}
                     </Badge>
@@ -1438,22 +1441,22 @@ export default function Playlists() {
                         return (
                           <Card
                             key={`admin-${p.id}`}
-                            className={cn("border-2 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden backdrop-blur-x1 group",
+                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl group ring-1 ring-border/50",
                               theme === "dark"
-                                ? "bg-background/50 border-primary/40 hover:border-primary/60"
-                                : "bg-background/70 border-primary/30 hover:border-primary/50",
-                              active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary shadow-2xl scale-[1.02]"
+                                ? "bg-background/40 hover:bg-background/60"
+                                : "bg-white/60 hover:bg-white/80",
+                              active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary/50 shadow-lg shadow-primary/10 scale-[1.01]"
                             )}
                           >
-                            <CardHeader className="p-3 pb-2 space-y-2 relative">
+                            <CardHeader className="p-4 pb-2 space-y-2 relative">
                               <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur-xl" />
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <CardTitle className="text-lg font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+                                    <CardTitle className="text-base font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
                                       {p.title}
                                     </CardTitle>
-                                    <Badge className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm">
+                                    <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 backdrop-blur-sm text-[10px] h-5 px-1.5">
                                       <Shield className="h-3 w-3 mr-1" />
                                       Recommended
                                     </Badge>
@@ -1470,7 +1473,7 @@ export default function Playlists() {
                                 </div>
                               </div>
                             </CardHeader>
-                            <CardContent className="space-y-1 p-3 pt-0">
+                            <CardContent className="space-y-1 p-4 pt-0">
                               {filteredLectures.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-4">No lectures match your filters</p>
                               ) : (
@@ -1480,14 +1483,14 @@ export default function Playlists() {
                                       key={l.id}
                                       onClick={() => setActive({ pid: p.id, lid: l.id, isAdmin: true })}
                                       className={cn(
-                                        "w-full text-left p-2 rounded-md transition-all text-sm group/item",
+                                        "w-full text-left p-2 rounded-lg transition-all text-sm group/item",
                                         theme === "dark"
                                           ? active?.pid === p.id && active?.lid === l.id && active?.isAdmin
-                                            ? "bg-primary/30 text-white shadow-md"
-                                            : "hover:bg-white/10 text-muted-foreground hover:text-white border border-transparent hover:border-primary/20"
+                                            ? "bg-primary/20 text-primary-foreground shadow-sm ring-1 ring-primary/20"
+                                            : "hover:bg-white/5 text-muted-foreground hover:text-foreground"
                                           : active?.pid === p.id && active?.lid === l.id && active?.isAdmin
-                                            ? "bg-primary/20 text-foreground shadow-md"
-                                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-transparent hover:border-primary/20"
+                                            ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                                            : "hover:bg-black/5 text-muted-foreground hover:text-foreground"
                                       )}
                                     >
                                       <div className="flex items-center gap-3">
@@ -1511,27 +1514,27 @@ export default function Playlists() {
                 </div>
 
                 {/* CUSTOM PLAYLISTS SECTION */}
-                <div className={cn("space-y-4 p-4 rounded-2xl border-2 backdrop-blur-2xl transition-all duration-300",
+                <div className={cn("space-y-4 p-1 rounded-3xl transition-all duration-300",
                   theme === "dark"
-                    ? "bg-gradient-to-br from-background/60 via-background/40 to-background/60 border-white/10 shadow-xl"
-                    : "bg-gradient-to-br from-background/80 via-background/60 to-background/80 border-border shadow-lg"
+                    ? "bg-gradient-to-b from-white/5 to-transparent"
+                    : "bg-gradient-to-b from-black/5 to-transparent"
                 )}>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4 px-2">
                     <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
+                      <div className={cn("p-2.5 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 shadow-inner",
                         theme === "dark" ? "backdrop-blur-sm" : ""
                       )}>
                         <Bookmark className="h-5 w-5 text-blue-500" />
                       </div>
                       <div>
-                        <h3 className={cn("text-lg font-bold", theme === "dark" ? "text-white" : "text-foreground")}>
+                        <h3 className={cn("text-base font-bold tracking-tight", theme === "dark" ? "text-white" : "text-foreground")}>
                           My Custom Playlists
                         </h3>
                         <p className="text-xs text-muted-foreground">Your personal playlists</p>
                       </div>
                     </div>
                     {playlists.length > 0 && (
-                      <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30">
+                      <Badge variant="secondary" className="bg-blue-500/10 text-blue-500 border-0">
                         {playlists.length}
                       </Badge>
                     )}
@@ -1554,14 +1557,15 @@ export default function Playlists() {
                         return (
                           <Card
                             key={p.id}
-                            className={cn("border-2 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-x1",
-                              theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
+                            className={cn("border-0 shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden backdrop-blur-xl ring-1 ring-border/50",
+                              theme === "dark" ? "bg-background/40 hover:bg-background/60" : "bg-white/60 hover:bg-white/80",
+                              active?.pid === p.id && !active?.isAdmin && "ring-2 ring-primary/50 shadow-lg shadow-primary/10 scale-[1.01]"
                             )}
                           >
-                            <CardHeader className="p-4 pb-2 space-y-2">
+                            <CardHeader className="p-4 pb-2 space-y-2 relative">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <CardTitle className="text-lg font-bold">{p.title}</CardTitle>
+                                  <CardTitle className="text-base font-bold">{p.title}</CardTitle>
                                   {p.description && (
                                     <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{p.description}</p>
                                   )}
@@ -1721,7 +1725,7 @@ export default function Playlists() {
                               })()}
                             </CardHeader>
 
-                            <CardContent className="space-y-2 p-3 pt-0">
+                            <CardContent className="space-y-2 p-4 pt-0">
                               {filteredLectures.length === 0 && p.lectures.length > 0 && (
                                 <div className="text-center py-8 text-muted-foreground text-sm">
                                   No lectures match your filters
@@ -1732,8 +1736,8 @@ export default function Playlists() {
                                   <div
                                     key={l.id}
                                     className={`relative group flex gap-2 p-2 rounded-lg transition-all duration-200 ${active?.lid === l.id
-                                      ? "bg-gradient-to-r from-primary/10 to-purple-500/10 ring-2 ring-primary/30 shadow-md"
-                                      : "hover:bg-muted/60 hover:shadow-sm"
+                                      ? "bg-primary/10 ring-1 ring-primary/20 shadow-sm"
+                                      : "hover:bg-black/5 dark:hover:bg-white/5"
                                       }`}
                                   >
                                     {sortOption === "custom" && (
@@ -1768,7 +1772,7 @@ export default function Playlists() {
                                       onClick={() => setActive({ pid: p.id, lid: l.id })}
                                       className="flex-1 flex gap-2 cursor-pointer items-center"
                                     >
-                                      <div className="relative w-20 aspect-video bg-black rounded-md overflow-hidden shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
+                                      <div className="relative w-24 aspect-video bg-black rounded-md overflow-hidden shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
                                         <img
                                           src={`https://img.youtube.com/vi/${l.videoId}/mqdefault.jpg`}
                                           className="w-full h-full object-cover transition-transform group-hover:scale-105"
@@ -1830,17 +1834,17 @@ export default function Playlists() {
                                   placeholder="Lecture title"
                                   value={newLectureTitle}
                                   onChange={(e) => setNewLectureTitle(e.target.value)}
-                                  className="h-8 text-xs"
+                                  className="h-8 text-xs bg-muted/30 border-transparent focus:bg-background focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
                                 />
                                 <Input
                                   placeholder="YouTube link"
                                   value={newLectureUrl}
                                   onChange={(e) => setNewLectureUrl(e.target.value)}
-                                  className="h-8 text-xs"
+                                  className="h-8 text-xs bg-muted/30 border-transparent focus:bg-background focus:border-primary/20 focus:ring-2 focus:ring-primary/10"
                                 />
                                 <Button
                                   onClick={() => addLecture(p)}
-                                  className="w-full h-8 text-xs"
+                                  className="w-full h-8 text-xs shadow-sm"
                                   size="sm"
                                 >
                                   Add lecture
@@ -1943,14 +1947,14 @@ export default function Playlists() {
             )}
 
             {/* PLAYER + NOTES */}
-            <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-24"}`)}>
-              <Card className={cn(`shadow-2xl border-2 backdrop-blur-x1 transition-all duration-300`,
-                theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border",
+            <div className={cn(`${theatre ? "fixed inset-0 z-[100] bg-black p-4 md:p-8" : "sticky top-6"}`)}>
+              <Card className={cn(`shadow-2xl border-0 ring-1 ring-white/10 backdrop-blur-xl transition-all duration-500 overflow-hidden`,
+                theme === "dark" ? "bg-background/60" : "bg-white/70",
                 theatre ? "h-full flex flex-col" : ""
               )}>
                 {current ? (
                   <>
-                    <div className={cn(`aspect-video bg-black ${theatre ? "flex-1 min-h-0" : ""} rounded-t-lg overflow-hidden relative`)}>
+                    <div className={cn(`aspect-video bg-black ${theatre ? "flex-1 min-h-0" : ""} overflow-hidden relative group`)}>
                       {/* Blur effect behind video */}
                       <div className={cn("absolute inset-0 -z-10 blur-3xl opacity-30 transition-opacity",
                         theme === "dark" ? "bg-gradient-to-br from-primary/40 via-purple-500/40 to-pink-500/40" : "bg-gradient-to-br from-primary/20 via-purple-500/20 to-pink-500/20"
@@ -1964,7 +1968,7 @@ export default function Playlists() {
                       <iframe
                         ref={iframeRef}
                         src={`https://www.youtube.com/embed/${current.videoId}`}
-                        className="w-full h-full relative z-10"
+                        className="w-full h-full relative z-10 shadow-2xl"
                         allowFullScreen
                         onLoad={() => (watchStartRef.current = Date.now())}
                       />
@@ -1999,7 +2003,7 @@ export default function Playlists() {
 
                     <CardContent className="space-y-5 p-6">
                       <div className="flex justify-between items-start gap-4">
-                        <h2 className="text-xl font-bold leading-tight flex-1">{current.title}</h2>
+                        <h2 className="text-2xl font-bold leading-tight flex-1 tracking-tight">{current.title}</h2>
                         <div className="flex gap-2">
                           <Button
                             variant={timerActive ? "default" : "outline"}
@@ -2021,7 +2025,7 @@ export default function Playlists() {
                       </div>
 
                       {showFocusTip && (
-                        <div className="flex items-center justify-between gap-4 p-4 rounded-xl bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20">
+                        <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-gradient-to-r from-primary/5 to-purple-500/5 border border-primary/10">
                           <div className="flex items-center gap-2 text-sm">
                             <span className="text-2xl">💡</span>
                             <span className="text-muted-foreground">
@@ -2042,7 +2046,7 @@ export default function Playlists() {
                       {/* NOTES */}
                       <div className="space-y-4">
                         {/* EDITOR CONTAINER */}
-                        <div className="flex flex-col border-2 rounded-xl bg-background/50 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 relative">
+                        <div className="flex flex-col border rounded-xl bg-background/50 shadow-sm transition-all focus-within:border-primary/30 focus-within:ring-4 focus-within:ring-primary/5 relative overflow-hidden">
                           {/* TOOLBAR */}
                           <div className="flex items-center justify-between p-2 bg-muted/30 border-b gap-2 overflow-x-auto scrollbar-none rounded-t-xl">
                             <div className="flex items-center gap-1">
