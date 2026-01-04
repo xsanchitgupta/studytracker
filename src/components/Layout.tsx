@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -5,17 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { 
-  BookOpen, 
-  Search, 
-  LogOut, 
-  Settings, 
-  User as UserIcon,
-  Menu,
-  X,
-  ChevronRight,
-  Bell
+  BookOpen, Search, LogOut, Settings, User as UserIcon,
+  Menu, X, ChevronRight, Bell, Command, Sparkles
 } from "lucide-react";
-import { useState, useEffect } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,13 +25,9 @@ export default function Layout() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // --- 1. DETECT SPECIAL PAGES ---
-  // We hide the global header/footer on these pages because they have their own.
-  const isLandingPage = location.pathname === "/";
-  const isAuthPage = location.pathname === "/auth";
-  const isChatPage = location.pathname === "/chat";
-  const isStandalonePage = isLandingPage || isAuthPage || isChatPage;
-
+  // --- 1. CONFIGURATION ---
+  const isStandalonePage = ["/", "/auth", "/chat"].includes(location.pathname);
+  
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
@@ -55,154 +44,172 @@ export default function Layout() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col font-sans selection:bg-primary/30">
+    <div className="min-h-screen flex flex-col font-sans selection:bg-primary/30 bg-background text-foreground transition-colors duration-500">
       
-      {/* --- CONDITIONAL HEADER --- */}
+      {/* --- FLOATING HUD HEADER --- */}
       {!isStandalonePage && (
         <header 
           className={cn(
-            "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
+            "fixed top-0 left-0 right-0 z-50 transition-all duration-500 ease-in-out border-b border-transparent",
             scrolled 
-              ? "bg-background/80 backdrop-blur-xl border-border/40 shadow-sm py-3" 
-              : "bg-transparent border-transparent py-5"
+              ? "bg-background/70 backdrop-blur-2xl border-border/40 py-3 shadow-sm supports-[backdrop-filter]:bg-background/60" 
+              : "bg-transparent py-5"
           )}
         >
-          <div className="container mx-auto px-4 flex items-center justify-between">
+          <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
             
-            {/* Logo */}
-            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => navigate("/dashboard")}>
+            {/* 1. BRAND IDENTITY */}
+            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate("/dashboard")}>
               <div className={cn(
-                "p-2 rounded-xl transition-all duration-300 group-hover:scale-110 group-hover:rotate-3",
-                scrolled ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                "relative p-2 rounded-xl overflow-hidden transition-all duration-500 group-hover:scale-110",
+                scrolled ? "bg-primary/10 text-primary" : "bg-primary text-primary-foreground shadow-lg shadow-primary/25"
               )}>
-                <BookOpen className="h-5 w-5" />
+                <BookOpen className="h-5 w-5 relative z-10" />
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <span className="font-bold text-lg tracking-tight">StudySync</span>
+              <div className="flex flex-col">
+                <span className="font-bold text-lg tracking-tight leading-none">StudySync</span>
+                {/* VERSION TAG: Removed opacity-0 to keep it visible */}
+                <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest mt-0.5">OS v2.4</span>
+              </div>
             </div>
 
-            {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-1 bg-background/50 backdrop-blur-md px-2 py-1 rounded-full border border-border/40 shadow-sm">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    navigate(link.href);
-                  }}
-                  className={cn(
-                    "px-4 py-1.5 text-sm font-medium rounded-full transition-all hover:bg-muted/80",
-                    location.pathname === link.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {link.label}
-                </a>
-              ))}
+            {/* 2. NAVIGATION PILL */}
+            <nav className="hidden md:flex items-center gap-1 bg-muted/40 backdrop-blur-md p-1.5 rounded-full border border-white/5 shadow-inner">
+              {navLinks.map((link) => {
+                const isActive = location.pathname === link.href;
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={(e) => { e.preventDefault(); navigate(link.href); }}
+                    className={cn(
+                      "relative px-5 py-2 text-sm font-medium rounded-full transition-all duration-300",
+                      isActive 
+                        ? "text-primary-foreground bg-background shadow-md" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                    )}
+                  >
+                    {isActive && (
+                      <span className="absolute inset-0 bg-primary/10 rounded-full blur-md -z-10" />
+                    )}
+                    {link.label}
+                  </a>
+                );
+              })}
             </nav>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-2 md:gap-4">
-              <div className="hidden lg:flex items-center relative group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                <input 
-                  placeholder="Search..." 
-                  className="pl-9 pr-4 py-1.5 w-48 bg-muted/40 border border-transparent rounded-full text-sm focus:bg-background focus:border-primary/50 focus:w-64 transition-all outline-none" 
-                />
+            {/* 3. ACTION CLUSTER */}
+            <div className="flex items-center gap-3 md:gap-5">
+              
+              {/* Search Trigger */}
+              <div className="hidden lg:flex items-center group relative cursor-pointer hover:scale-105 transition-transform">
+                <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full opacity-0 group-hover:opacity-50 transition-opacity" />
+                <div className="relative flex items-center gap-2 px-3 py-1.5 bg-background/50 border border-input rounded-full text-sm text-muted-foreground shadow-sm group-hover:border-primary/50 transition-colors">
+                  <Search className="h-3.5 w-3.5" />
+                  <span className="opacity-50 text-xs">Search...</span>
+                  <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-muted rounded-md text-[10px] font-mono border border-border">
+                    <Command className="h-3 w-3" /> K
+                  </div>
+                </div>
               </div>
+
+              <div className="w-px h-6 bg-border/50 hidden md:block" />
 
               <ThemeToggle />
 
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="rounded-full relative">
-                  <Bell className="h-5 w-5 text-muted-foreground" />
-                  <span className="absolute top-2 right-2 h-2 w-2 bg-red-500 rounded-full ring-2 ring-background" />
-                </Button>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-transparent hover:ring-primary/20 transition-all">
-                      <AvatarImage src={user?.photoURL || ""} />
-                      <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold">
-                        {user?.email?.[0].toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 rounded-xl p-2">
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{user?.displayName || "Student"}</p>
-                        <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate("/profile")} className="rounded-lg cursor-pointer">
-                      <UserIcon className="mr-2 h-4 w-4" /> Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="rounded-lg cursor-pointer">
-                      <Settings className="mr-2 h-4 w-4" /> Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout} className="text-red-600 focus:text-red-600 rounded-lg cursor-pointer">
-                      <LogOut className="mr-2 h-4 w-4" /> Log out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Notifications */}
+              <Button variant="ghost" size="icon" className="rounded-full relative hover:bg-primary/10 transition-colors group">
+                <Bell className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+              </Button>
+              
+              {/* Profile Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-transparent hover:ring-primary/20 transition-all active:scale-95">
+                    <AvatarImage src={user?.photoURL || ""} className="object-cover" />
+                    <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold text-xs">
+                      {user?.email?.[0].toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 border-border/50 backdrop-blur-xl bg-background/95 shadow-xl">
+                  <DropdownMenuLabel className="font-normal px-2 py-3">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-bold leading-none">{user?.displayName || "Scholar"}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-border/50" />
+                  <DropdownMenuItem onClick={() => navigate("/profile")} className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary">
+                    <UserIcon className="mr-2 h-4 w-4" /> Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="rounded-xl cursor-pointer py-2.5 focus:bg-primary/10 focus:text-primary">
+                    <Settings className="mr-2 h-4 w-4" /> Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-border/50" />
+                  <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-600 focus:bg-red-500/10 rounded-xl cursor-pointer py-2.5">
+                    <LogOut className="mr-2 h-4 w-4" /> Terminate Session
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-              {/* Mobile Menu Toggle */}
-              <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+              {/* Mobile Toggle */}
+              <Button variant="ghost" size="icon" className="md:hidden rounded-full" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
                 {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </Button>
             </div>
           </div>
 
-          {/* Mobile Menu */}
-          {mobileMenuOpen && (
-            <div className="absolute top-full left-0 right-0 bg-background/95 backdrop-blur-xl border-b border-border/50 p-4 md:hidden animate-in slide-in-from-top-2">
-              <div className="flex flex-col gap-2">
-                {navLinks.map((link) => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(link.href);
-                    }}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted font-medium"
-                  >
+          {/* 4. MOBILE MENU OVERLAY */}
+          <div className={cn(
+            "absolute top-full left-0 right-0 bg-background/95 backdrop-blur-2xl border-b border-border/50 p-6 md:hidden transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] origin-top",
+            mobileMenuOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+          )}>
+            <div className="flex flex-col gap-2">
+              {navLinks.map((link, i) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={(e) => { e.preventDefault(); navigate(link.href); }}
+                  className="flex items-center justify-between p-4 rounded-2xl hover:bg-muted/50 font-medium text-lg active:scale-[0.98] transition-all"
+                  style={{ animationDelay: `${i * 50}ms` }}
+                >
+                  <span className="flex items-center gap-3">
+                    <div className={cn("w-1.5 h-1.5 rounded-full", location.pathname === link.href ? "bg-primary" : "bg-muted-foreground/30")} />
                     {link.label}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </a>
-                ))}
-              </div>
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground/50" />
+                </a>
+              ))}
             </div>
-          )}
+          </div>
         </header>
       )}
 
-      {/* --- CONTENT WRAPPER --- */}
-      {/* We remove padding-top if there is no header, so Landing/Auth can go full screen */}
-      <main className={cn("flex-1", !isStandalonePage && "pt-24")}>
+      {/* --- CONTENT INJECTION --- */}
+      <main className={cn("flex-1 relative z-0", !isStandalonePage && "pt-24")}>
+        <div className="absolute inset-0 -z-10 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.02]" />
         <Outlet />
       </main>
 
-      {/* --- CONDITIONAL FOOTER --- */}
-      {/* We hide the global footer on Landing/Auth because they have their own specific footers */}
+      {/* --- FOOTER --- */}
       {!isStandalonePage && (
-        <footer className="border-t border-border/40 py-12 bg-muted/20 mt-auto">
-          <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2 opacity-70 hover:opacity-100 transition-opacity">
-              <BookOpen className="h-5 w-5 text-primary" />
-              <span className="font-bold">StudySync</span>
+        <footer className="border-t border-border/40 py-16 bg-muted/5 mt-auto">
+          <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity cursor-default">
+              <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+              <span className="font-bold tracking-tight text-sm">StudySync OS</span>
             </div>
             
-            <div className="flex gap-8 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-              <a href="#" className="hover:text-primary transition-colors">Terms</a>
-              <a href="#" className="hover:text-primary transition-colors">Twitter</a>
+            <div className="flex gap-8 text-xs font-medium text-muted-foreground uppercase tracking-widest">
+              <a href="#" className="hover:text-primary transition-colors">Privacy Protocol</a>
+              <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
+              <a href="#" className="hover:text-primary transition-colors">Support Uplink</a>
             </div>
             
-            <p className="text-sm text-muted-foreground">© 2025 StudySync Inc.</p>
+            <p className="text-xs text-muted-foreground/50 font-mono">v2.4.0 • Build 8921</p>
           </div>
         </footer>
       )}
