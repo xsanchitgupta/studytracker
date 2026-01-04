@@ -21,7 +21,9 @@ import {
   Cpu,
   CheckCircle2,
   Lock,
-  MessageCircle
+  MessageCircle,
+  Menu,
+  X
 } from "lucide-react";
 
 // --- COMPONENTS ---
@@ -92,6 +94,7 @@ const Landing = () => {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -112,30 +115,61 @@ const Landing = () => {
       {/* FLOATING NAVBAR */}
       <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4">
         <nav className={cn(
-          "flex items-center gap-4 rounded-full border px-6 py-3 shadow-lg backdrop-blur-xl transition-all duration-300",
-          theme === "dark" ? "bg-zinc-900/60 border-white/10" : "bg-white/70 border-zinc-200"
+          "flex items-center justify-between gap-4 rounded-full border px-6 py-3 shadow-lg backdrop-blur-xl transition-all duration-300 w-full max-w-5xl",
+          theme === "dark" ? "bg-zinc-900/80 border-white/10" : "bg-white/80 border-zinc-200"
         )}>
-          <div className="flex items-center gap-2 pr-6 border-r border-border/50 cursor-pointer" onClick={() => navigate("/")}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
             <div className="bg-primary/20 p-1.5 rounded-lg text-primary">
               <BookOpen className="h-4 w-4" />
             </div>
-            <span className="font-bold tracking-tight">StudySync</span>
+            <span className="font-bold tracking-tight text-lg">StudySync</span>
           </div>
           
+          {/* Desktop Links */}
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             <a href="#features" className="hover:text-primary transition-colors">Features</a>
             <a href="#leaderboard" className="hover:text-primary transition-colors">Leaderboard</a>
             <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
           </div>
 
-          <div className="pl-2 flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
             <Button size="sm" onClick={() => navigate("/auth")} className="rounded-full px-5 shadow-lg shadow-primary/20">
               Get Started
             </Button>
           </div>
+
+          {/* Mobile Menu Toggle */}
+          <div className="flex md:hidden items-center gap-3">
+             <ThemeToggle />
+             <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+             </Button>
+          </div>
         </nav>
       </div>
+
+      {/* MOBILE MENU OVERLAY */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 bg-background/95 backdrop-blur-xl pt-24 px-6 md:hidden animate-in slide-in-from-top-10 duration-200">
+           <div className="flex flex-col gap-6 text-lg font-medium">
+              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between border-b border-border/50 pb-4">
+                 Features <ArrowRight className="h-4 w-4 opacity-50" />
+              </a>
+              <a href="#leaderboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between border-b border-border/50 pb-4">
+                 Leaderboard <ArrowRight className="h-4 w-4 opacity-50" />
+              </a>
+              <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between border-b border-border/50 pb-4">
+                 Pricing <ArrowRight className="h-4 w-4 opacity-50" />
+              </a>
+              <div className="pt-4">
+                <Button size="lg" className="w-full rounded-full" onClick={() => navigate("/auth")}>
+                   Get Started Now
+                </Button>
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* HERO SECTION */}
       <main className="container mx-auto px-4 pt-32 pb-20 text-center">
@@ -172,7 +206,7 @@ const Landing = () => {
           <Button 
             size="lg" 
             onClick={() => navigate("/auth")} 
-            className="h-14 min-w-[200px] rounded-full px-8 text-base font-semibold shadow-xl shadow-primary/25 transition-all hover:scale-105 hover:shadow-primary/40"
+            className="h-14 w-full sm:w-auto rounded-full px-8 text-base font-semibold shadow-xl shadow-primary/25 transition-all hover:scale-105 hover:shadow-primary/40"
           >
             Start Studying Now
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -181,7 +215,7 @@ const Landing = () => {
           <Button 
             variant="outline" 
             size="lg" 
-            className="h-14 min-w-[200px] rounded-full border-2 bg-transparent px-8 text-base hover:bg-muted/50 transition-all hover:scale-105"
+            className="h-14 w-full sm:w-auto rounded-full border-2 bg-transparent px-8 text-base hover:bg-muted/50 transition-all hover:scale-105"
           >
             <Play className="mr-2 h-4 w-4" />
             Watch Demo
@@ -209,7 +243,7 @@ const Landing = () => {
                   </div>
                   
                   {/* Fake Content */}
-                  <div className="flex-1 p-8 flex gap-8">
+                  <div className="flex-1 p-4 md:p-8 flex gap-8">
                      {/* Sidebar */}
                      <div className="w-48 h-full hidden md:flex flex-col gap-3 opacity-50">
                         <div className="h-8 bg-white/10 rounded-lg w-full" />
@@ -224,11 +258,11 @@ const Landing = () => {
                               <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-primary/20" />
                               <div className="absolute bottom-4 left-4 h-4 w-24 bg-primary/20 rounded" />
                            </div>
-                           <div className="h-32 flex-1 bg-white/5 rounded-2xl border border-white/5 p-4" />
-                           <div className="h-32 flex-1 bg-white/5 rounded-2xl border border-white/5 p-4" />
+                           <div className="h-32 flex-1 bg-white/5 rounded-2xl border border-white/5 p-4 hidden sm:block" />
+                           <div className="h-32 flex-1 bg-white/5 rounded-2xl border border-white/5 p-4 hidden sm:block" />
                         </div>
                         <div className="h-64 bg-white/5 rounded-2xl border border-white/5 w-full flex items-center justify-center">
-                            <div className="text-center">
+                            <div className="text-center px-4">
                                 <TrendingUp className="h-12 w-12 text-muted-foreground/20 mx-auto mb-2" />
                                 <p className="text-muted-foreground/30 font-mono text-sm">Real-time Performance Metrics</p>
                             </div>
@@ -362,56 +396,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* METRICS SECTION */}
-      <section className="py-24 border-y border-border/40 bg-muted/20 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12">
-             {[
-               { icon: Users, label: "Active Students", value: "10k+" },
-               { icon: Layout, label: "Flashcards Generated", value: "2M+" },
-               { icon: MessageCircle, label: "Peer Messages", value: "500k" },
-               { icon: Lock, label: "Private & Encrypted", value: "100%" }
-             ].map((stat, i) => (
-               <div key={i} className="flex flex-col items-center justify-center text-center group cursor-default">
-                  <div className="mb-4 p-3 rounded-2xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
-                    <stat.icon className="h-6 w-6" />
-                  </div>
-                  <h4 className="text-4xl font-bold tracking-tighter mb-1">{stat.value}</h4>
-                  <p className="text-sm text-muted-foreground font-medium">{stat.label}</p>
-               </div>
-             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FINAL CTA */}
-      <section className="container mx-auto px-4 py-32 text-center relative">
-        <div className="mx-auto max-w-3xl">
-           <div className="inline-flex items-center justify-center p-1 rounded-full bg-gradient-to-r from-primary via-purple-500 to-pink-500 mb-8">
-              <div className="px-6 py-2 bg-background rounded-full">
-                 <span className="text-sm font-bold bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                   Ready to upgrade your GPA?
-                 </span>
-              </div>
-           </div>
-           
-           <h2 className="text-4xl md:text-6xl font-bold tracking-tight mb-8">
-             Join the revolution <br/> in academic performance.
-           </h2>
-           
-           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" onClick={() => navigate("/auth")} className="h-14 px-8 rounded-full text-lg shadow-2xl shadow-primary/30 hover:shadow-primary/50 transition-all hover:-translate-y-1">
-                Get Started for Free
-              </Button>
-           </div>
-           
-           <p className="mt-8 text-sm text-muted-foreground">
-             No credit card required · Free tier available · Cancel anytime
-           </p>
-        </div>
-      </section>
-
       {/* FOOTER */}
       <footer className="border-t border-border/40 py-12 bg-background/50 backdrop-blur-lg">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
@@ -424,7 +408,6 @@ const Landing = () => {
               <a href="#" className="hover:text-primary transition-colors">Privacy</a>
               <a href="#" className="hover:text-primary transition-colors">Terms</a>
               <a href="#" className="hover:text-primary transition-colors">Twitter</a>
-              <a href="#" className="hover:text-primary transition-colors">Discord</a>
            </div>
            
            <p className="text-sm text-muted-foreground">© 2025 StudySync Inc.</p>
