@@ -566,7 +566,7 @@ export default function Chat() {
     } finally {
       setIsUploading(false);
     }
-  }, [text, imageFile, user, activeChat.id, replyingTo, editingMessage, profile]);
+  }, [text, imageFile, user, activeChat?.id, replyingTo, editingMessage, profile]);
 
   const handleReaction = async (message: Message, emoji: string) => {
     if (!user) return;
@@ -930,7 +930,7 @@ export default function Chat() {
                             className={cn(
                               "w-full flex items-center rounded-xl transition-all duration-300 hover:bg-white/5",
                               collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5 text-left",
-                              activeChat.id.includes(u.uid) ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground"
+                              activeChat?.type === 'dm' && activeChat?.otherUserId === u.uid ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground"
                             )}
                             onClick={() => startDM(u)}
                           >
@@ -983,7 +983,7 @@ export default function Chat() {
                            className={cn(
                              "w-full flex items-center rounded-xl transition-all duration-300 hover:bg-white/5",
                              collapsed ? "justify-center p-2" : "gap-3 px-3 py-2.5 text-left",
-                             activeChat.id.includes(u.uid) ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground"
+                             activeChat?.type === 'dm' && activeChat?.otherUserId === u.uid ? "bg-primary/10 text-primary border border-primary/20" : "text-muted-foreground"
                            )}
                            onClick={() => startDM(u)}
                          >
