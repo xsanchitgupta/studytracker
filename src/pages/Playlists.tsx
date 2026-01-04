@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import {
   collection,
@@ -66,24 +65,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
 
 import {
-  ArrowLeft,
   Plus,
   Trash2,
-  Settings,
   PlayCircle,
   Check,
   Maximize,
   Minimize,
   Focus,
-  Flame,
   Sparkles,
   Search,
   Filter,
@@ -94,13 +84,8 @@ import {
   X,
   ArrowUp,
   ArrowDown,
-  Copy,
-  Download,
-  Upload,
   FileText,
-  Archive,
   Calendar,
-  HelpCircle,
   BarChart3,
   Bookmark,
   Shield,
@@ -210,14 +195,11 @@ export default function Playlists() {
   const [showSymbolPad, setShowSymbolPad] = useState(false);
   const { user } = useAuth();
   const { theme } = useTheme();
-  const navigate = useNavigate();
   const symbolButtonRef = useRef<HTMLButtonElement | null>(null);
   const symbolPopupRef = useRef<HTMLDivElement | null>(null);
 
   /* ===== PATCH: TAG + PDF + AI STATES ===== */
   const [activeTags, setActiveTags] = useState<NoteTag[]>([]);
-  const [showMathPad, setShowMathPad] = useState(false);
-  const [aiError, setAiError] = useState("");
 
   const watchStartRef = useRef<number | null>(null);
   const notesSaveTimer = useRef<NodeJS.Timeout | null>(null);
@@ -235,7 +217,6 @@ export default function Playlists() {
 
   const [theatre, setTheatre] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const [streak] = useState(3);
   const [showFocusTip, setShowFocusTip] = useState(true);
 
   /* ---------- NOTES STATES ---------- */
@@ -267,7 +248,6 @@ export default function Playlists() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOption, setFilterOption] = useState<FilterOption>("all");
   const [selectedTagFilter, setSelectedTagFilter] = useState<NoteTag | "all">("all");
-  const [showArchived, setShowArchived] = useState(false);
 
   // Sort
   const [sortOption, setSortOption] = useState<SortOption>("custom");
@@ -279,7 +259,6 @@ export default function Playlists() {
   const [timerActive, setTimerActive] = useState(false);
   const [timerMode, setTimerMode] = useState<"pomodoro" | "break">("pomodoro");
   const [timerSeconds, setTimerSeconds] = useState(25 * 60); // 25 minutes default
-  const [sessionMinutes, setSessionMinutes] = useState(0);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Timestamp Notes
@@ -307,9 +286,6 @@ export default function Playlists() {
     { name: "Formulas", content: "## Formulas\n\n\n" },
   ];
 
-  // Keyboard shortcuts help
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-
   // Loading states
   const [loading, setLoading] = useState(false);
 
@@ -318,9 +294,6 @@ export default function Playlists() {
   const [playlistDescriptionInput, setPlaylistDescriptionInput] = useState("");
   const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState<{ [key: string]: boolean }>({});
-
-  // Global search
-  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
 
   // Per-playlist stats
   const [showPlaylistStats, setShowPlaylistStats] = useState<string | null>(null);
@@ -1160,7 +1133,6 @@ export default function Playlists() {
             setTimerMode((currentMode) => {
               if (currentMode === "pomodoro") {
                 setTimerSeconds(5 * 60); // 5 minute break
-                setSessionMinutes((prev) => prev + 25);
                 return "break";
               } else {
                 setTimerSeconds(25 * 60);
@@ -1206,108 +1178,6 @@ export default function Playlists() {
     const charactersNoSpaces = localNotes.replace(/\s/g, "").length;
     return { words, characters, charactersNoSpaces };
   }, [localNotes]);
-
-  // DUPLICATE PLAYLIST
-  const duplicatePlaylist = useCallback(async (p: Playlist) => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const newTitle = `${p.title} (Copy)`;
-      const ref = await addDoc(
-        collection(db, "users", user.uid, "playlists"),
-        {
-          ...p,
-          title: newTitle,
-          createdAt: Date.now(),
-        }
-      );
-      setPlaylists((ps) => [...ps, { ...p, id: ref.id, title: newTitle }]);
-      toast({ title: "Playlist duplicated", description: `${newTitle} has been created.` });
-    } catch (error) {
-      console.error("Error duplicating playlist:", error);
-      toast({ title: "Error", description: "Failed to duplicate playlist.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }, [user, toast]);
-
-  // IMPORT/EXPORT PLAYLISTS
-  const exportPlaylists = useCallback(() => {
-    try {
-      const data = playlists.map((p) => ({
-        title: p.title,
-        description: p.description,
-        lectures: p.lectures.map((l) => ({
-          title: l.title,
-          videoId: l.videoId,
-          notes: l.notes,
-          tags: l.tags,
-        })),
-      }));
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `playlists-${new Date().toISOString().split("T")[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Exported", description: "Playlists exported successfully." });
-    } catch (error) {
-      console.error("Error exporting playlists:", error);
-      toast({ title: "Error", description: "Failed to export playlists.", variant: "destructive" });
-    }
-  }, [playlists, toast]);
-
-  const importPlaylists = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !event.target.files?.[0]) return;
-    try {
-      setLoading(true);
-      const file = event.target.files[0];
-      const text = await file.text();
-      const data = JSON.parse(text);
-
-      if (!Array.isArray(data)) {
-        throw new Error("Invalid file format");
-      }
-
-      for (const playlistData of data) {
-        const lectures = (playlistData.lectures || []).map((l: any) => ({
-          id: crypto.randomUUID(),
-          title: l.title,
-          videoId: l.videoId,
-          completed: false,
-          notes: l.notes || "",
-          watchTime: 0,
-          createdAt: Date.now(),
-          tags: l.tags || [],
-          timestampNotes: [],
-        }));
-
-        await addDoc(collection(db, "users", user.uid, "playlists"), {
-          title: playlistData.title,
-          description: playlistData.description || "",
-          lectures,
-          createdAt: Date.now(),
-        });
-      }
-
-      const snap = await getDocs(collection(db, "users", user.uid, "playlists"));
-      setPlaylists(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<Playlist, "id">),
-        }))
-      );
-
-      toast({ title: "Imported", description: `${data.length} playlist(s) imported successfully.` });
-      event.target.value = "";
-    } catch (error) {
-      console.error("Error importing playlists:", error);
-      toast({ title: "Error", description: "Failed to import playlists. Please check the file format.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }, [user, toast]);
 
   // BULK OPERATIONS
   const toggleLectureSelection = useCallback((lid: string) => {
@@ -1359,19 +1229,6 @@ export default function Playlists() {
       setLoading(false);
     }
   }, [user, selectedLectures, toast]);
-
-  // ARCHIVE PLAYLIST
-  const archivePlaylist = useCallback(async (pid: string, archive: boolean) => {
-    if (!user) return;
-    try {
-      await updateDoc(doc(db, "users", user.uid, "playlists", pid), { archived: archive });
-      setPlaylists((ps) => ps.map((p) => (p.id === pid ? { ...p, archived: archive } : p)));
-      toast({ title: archive ? "Archived" : "Unarchived", description: `Playlist ${archive ? "archived" : "unarchived"} successfully.` });
-    } catch (error) {
-      console.error("Error archiving playlist:", error);
-      toast({ title: "Error", description: "Failed to archive playlist.", variant: "destructive" });
-    }
-  }, [user, toast]);
 
   // UPDATE PLAYLIST DESCRIPTION
   const updatePlaylistDescription = useCallback(async (pid: string, description: string) => {
@@ -1440,332 +1297,11 @@ export default function Playlists() {
     }).catch(console.error);
   }, [active, user]);
 
-  // STATISTICS
-  const stats = useMemo(() => {
-    const allLectures = playlists.flatMap((p) => p.lectures);
-    const totalLectures = allLectures.length;
-    const completedLectures = allLectures.filter((l) => l.completed).length;
-    const totalWatchTime = allLectures.reduce((sum, l) => sum + (l.watchTime || 0), 0);
-    const totalPlaylists = playlists.length;
-
-    // Weekly stats (last 7 days)
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const recentLectures = allLectures.filter(
-      (l) => (l.createdAt || 0) > sevenDaysAgo
-    );
-    const weeklyWatchTime = recentLectures.reduce(
-      (sum, l) => sum + (l.watchTime || 0),
-      0
-    );
-
-    // Monthly stats (last 30 days)
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const monthlyLectures = allLectures.filter(
-      (l) => (l.createdAt || 0) > thirtyDaysAgo
-    );
-    const monthlyWatchTime = monthlyLectures.reduce(
-      (sum, l) => sum + (l.watchTime || 0),
-      0
-    );
-
-    // Completion rate by playlist
-    const playlistCompletion = playlists.map((p) => ({
-      title: p.title,
-      progress: getPlaylistProgress(p),
-    }));
-
-    // Watch time by day (last 7 days)
-    const dailyWatchTime = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - i));
-      date.setHours(0, 0, 0, 0);
-      const nextDay = new Date(date);
-      nextDay.setDate(nextDay.getDate() + 1);
-
-      // This is a simplified version - in a real app, you'd track daily watch time
-      return {
-        date: date.toLocaleDateString("en-US", { weekday: "short" }),
-        minutes: Math.floor(Math.random() * 60) + 10, // Placeholder
-      };
-    });
-
-    return {
-      totalLectures,
-      completedLectures,
-      totalWatchTime,
-      totalPlaylists,
-      weeklyWatchTime,
-      monthlyWatchTime,
-      playlistCompletion,
-      dailyWatchTime,
-      completionRate: totalLectures > 0 ? (completedLectures / totalLectures) * 100 : 0,
-    };
-  }, [playlists]);
-
   /* ================= UI ================= */
-
-  const filteredPlaylists = useMemo(() => {
-    return playlists.filter((p) => showArchived || !p.archived);
-  }, [playlists, showArchived]);
 
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-indigo-900/5 dark:to-indigo-950/10">
-        {/* HEADER */}
-        <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-x1 supports-[backdrop-filter]:bg-background/60">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/dashboard")}
-                className="hover:bg-primary/10 transition-colors"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <PlayCircle className="text-primary h-6 w-6" />
-              <span className="text-xl font-bold bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">
-                Playlists
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowGlobalSearch(true)}
-                      className="hover:bg-primary/10 transition-colors"
-                    >
-                      <Search className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Global Search (Ctrl+K)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={exportPlaylists}
-                      className="hover:bg-primary/10 transition-colors"
-                    >
-                      <Download className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Export Playlists</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <label>
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={importPlaylists}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        asChild
-                        className="hover:bg-primary/10 transition-colors cursor-pointer"
-                      >
-                        <span><Upload className="h-5 w-5" /></span>
-                      </Button>
-                    </label>
-                  </TooltipTrigger>
-                  <TooltipContent>Import Playlists</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <Dialog open={showShortcutsHelp} onOpenChange={setShowShortcutsHelp}>
-                <DialogTrigger asChild>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="hover:bg-primary/10 transition-colors">
-                          <HelpCircle className="h-5 w-5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Keyboard Shortcuts (?)</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Keyboard Shortcuts</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3 py-4">
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Next lecture</span>
-                      <kbd className="px-2 py-1 bg-muted border rounded text-xs">J</kbd>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Previous lecture</span>
-                      <kbd className="px-2 py-1 bg-muted border rounded text-xs">K</kbd>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Toggle focus mode</span>
-                      <kbd className="px-2 py-1 bg-muted border rounded text-xs">Ctrl + F</kbd>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Toggle theatre mode</span>
-                      <kbd className="px-2 py-1 bg-muted border rounded text-xs">Ctrl + T</kbd>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm font-medium">Show shortcuts</span>
-                      <kbd className="px-2 py-1 bg-muted border rounded text-xs">?</kbd>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <Dialog open={showStats} onOpenChange={setShowStats}>
-                <DialogTrigger asChild>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="hover:bg-primary/10 transition-colors">
-                          <BarChart3 className="h-5 w-5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Statistics</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold">Study Statistics</DialogTitle>
-                  </DialogHeader>
-                  <Tabs defaultValue="overview" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="overview">Overview</TabsTrigger>
-                      <TabsTrigger value="weekly">Weekly</TabsTrigger>
-                      <TabsTrigger value="playlists">Playlists</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="overview" className="space-y-4 mt-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-sm text-muted-foreground">Total Lectures</p>
-                            <p className="text-2xl font-bold">{stats.totalLectures}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-sm text-muted-foreground">Completed</p>
-                            <p className="text-2xl font-bold">{stats.completedLectures}</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-sm text-muted-foreground">Total Watch Time</p>
-                            <p className="text-2xl font-bold">{stats.totalWatchTime}m</p>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardContent className="p-4">
-                            <p className="text-sm text-muted-foreground">Completion Rate</p>
-                            <p className="text-2xl font-bold">{stats.completionRate.toFixed(0)}%</p>
-                          </CardContent>
-                        </Card>
-                      </div>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Daily Watch Time (Last 7 Days)</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="h-[200px] flex items-end justify-between gap-2">
-                            {stats.dailyWatchTime.map((day, i) => (
-                              <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                                <div className="w-full bg-muted rounded-t relative" style={{ height: `${Math.max((day.minutes / 60) * 100, 5)}%` }}>
-                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-                                    {day.minutes}m
-                                  </div>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{day.date}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="weekly" className="space-y-4 mt-4">
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="space-y-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Weekly Watch Time</p>
-                              <p className="text-3xl font-bold">{stats.weeklyWatchTime} minutes</p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-muted-foreground">Monthly Watch Time</p>
-                              <p className="text-3xl font-bold">{stats.monthlyWatchTime} minutes</p>
-                            </div>
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-500 dark:text-orange-400 text-sm font-medium w-fit">
-                              <Flame className="h-4 w-4" />
-                              <span>{streak}-day streak</span>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-                    <TabsContent value="playlists" className="space-y-4 mt-4">
-                      <div className="space-y-3">
-                        {stats.playlistCompletion.map((pc, i) => (
-                          <Card key={i}>
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-center mb-2">
-                                <p className="font-medium">{pc.title}</p>
-                                <p className="text-sm text-muted-foreground">{pc.progress}%</p>
-                              </div>
-                              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all"
-                                  style={{ width: `${pc.progress}%` }}
-                                />
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </DialogContent>
-              </Dialog>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/10 text-orange-500 dark:text-orange-400 text-sm font-medium">
-                <Flame className="h-4 w-4" />
-                <span>{streak}-day streak</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setFocusMode(!focusMode)}
-                className="hover:bg-primary/10 transition-colors"
-              >
-                <Focus className="h-5 w-5" />
-              </Button>
-              <ThemeToggle />
-              <Button variant="ghost" size="icon" className="hover:bg-primary/10 transition-colors">
-                <Settings className="h-5 w-5" />
-              </Button>
-              <Avatar
-                className="h-9 w-9 cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all"
-                onClick={() => navigate("/profile")}
-              >
-                <AvatarImage src={user?.photoURL || ""} />
-                <AvatarFallback className="bg-gradient-to-br from-primary to-purple-500 text-primary-foreground font-semibold">
-                  {user?.email?.charAt(0).toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </header>
-
         {/* MAIN */}
         <main className="container mx-auto px-4 py-8 max-w-7xl">
           <div className={`grid gap-8 ${focusMode ? "grid-cols-1" : "lg:grid-cols-[380px_minmax(0,1fr)]"}`}>
@@ -1815,14 +1351,6 @@ export default function Playlists() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button
-                      variant={showArchived ? "secondary" : "outline"}
-                      size="sm"
-                      onClick={() => setShowArchived((s) => !s)}
-                      className="w-full mt-2"
-                    >
-                      {showArchived ? "📂 Hide Archived Playlists" : "📂 Show Archived Playlists"}
-                    </Button>
                   </CardContent>
                 </Card>
 
@@ -1917,7 +1445,7 @@ export default function Playlists() {
                               active?.pid === p.id && active?.isAdmin && "ring-2 ring-primary shadow-2xl scale-[1.02]"
                             )}
                           >
-                            <CardHeader className="space-y-3 pb-3 relative">
+                            <CardHeader className="p-3 pb-2 space-y-2 relative">
                               <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity -z-10 blur-xl" />
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
@@ -1942,7 +1470,7 @@ export default function Playlists() {
                                 </div>
                               </div>
                             </CardHeader>
-                            <CardContent className="space-y-2">
+                            <CardContent className="space-y-1 p-3 pt-0">
                               {filteredLectures.length === 0 ? (
                                 <p className="text-xs text-muted-foreground text-center py-4">No lectures match your filters</p>
                               ) : (
@@ -1952,7 +1480,7 @@ export default function Playlists() {
                                       key={l.id}
                                       onClick={() => setActive({ pid: p.id, lid: l.id, isAdmin: true })}
                                       className={cn(
-                                        "w-full text-left p-3 rounded-lg transition-all text-sm group/item",
+                                        "w-full text-left p-2 rounded-md transition-all text-sm group/item",
                                         theme === "dark"
                                           ? active?.pid === p.id && active?.lid === l.id && active?.isAdmin
                                             ? "bg-primary/30 text-white shadow-md"
@@ -2021,7 +1549,7 @@ export default function Playlists() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {filteredPlaylists.map((p) => {
+                      {playlists.map((p) => {
                         const filteredLectures = filteredAndSortedLectures(p);
                         return (
                           <Card
@@ -2030,7 +1558,7 @@ export default function Playlists() {
                               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                             )}
                           >
-                            <CardHeader className="space-y-3 pb-3">
+                            <CardHeader className="p-4 pb-2 space-y-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <CardTitle className="text-lg font-bold">{p.title}</CardTitle>
@@ -2132,36 +1660,6 @@ export default function Playlists() {
                                       <TooltipContent>Playlist Statistics</TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-8 w-8"
-                                          onClick={() => duplicatePlaylist(p)}
-                                        >
-                                          <Copy className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>Duplicate</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          size="icon"
-                                          variant="ghost"
-                                          className="h-8 w-8"
-                                          onClick={() => archivePlaylist(p.id, !p.archived)}
-                                        >
-                                          <Archive className="h-4 w-4" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{p.archived ? "Unarchive" : "Archive"}</TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
                                   <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                       <TooltipProvider>
@@ -2223,100 +1721,100 @@ export default function Playlists() {
                               })()}
                             </CardHeader>
 
-                            <CardContent className="space-y-3 pt-3">
+                            <CardContent className="space-y-2 p-3 pt-0">
                               {filteredLectures.length === 0 && p.lectures.length > 0 && (
                                 <div className="text-center py-8 text-muted-foreground text-sm">
                                   No lectures match your filters
                                 </div>
                               )}
-                              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
+                              <div className="space-y-1 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
                                 {filteredLectures.map((l, index) => (
                                   <div
                                     key={l.id}
-                                    className={`relative group flex gap-3 p-3 rounded-xl transition-all duration-200 ${active?.lid === l.id
+                                    className={`relative group flex gap-2 p-2 rounded-lg transition-all duration-200 ${active?.lid === l.id
                                       ? "bg-gradient-to-r from-primary/10 to-purple-500/10 ring-2 ring-primary/30 shadow-md"
                                       : "hover:bg-muted/60 hover:shadow-sm"
                                       }`}
                                   >
                                     {sortOption === "custom" && (
-                                      <div className="flex flex-col gap-1 justify-center">
+                                      <div className="flex flex-col gap-0.5 justify-center">
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6"
+                                          className="h-5 w-5"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             moveLecture(p, l.id, "up");
                                           }}
                                           disabled={index === 0}
                                         >
-                                          <ArrowUp className="h-3 w-3" />
+                                          <ArrowUp className="h-3 w-3 opacity-50" />
                                         </Button>
                                         <Button
                                           size="icon"
                                           variant="ghost"
-                                          className="h-6 w-6"
+                                          className="h-5 w-5"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             moveLecture(p, l.id, "down");
                                           }}
                                           disabled={index === filteredLectures.length - 1}
                                         >
-                                          <ArrowDown className="h-3 w-3" />
+                                          <ArrowDown className="h-3 w-3 opacity-50" />
                                         </Button>
                                       </div>
                                     )}
                                     <div
                                       onClick={() => setActive({ pid: p.id, lid: l.id })}
-                                      className="flex-1 flex gap-3 cursor-pointer"
+                                      className="flex-1 flex gap-2 cursor-pointer items-center"
                                     >
-                                      <div className="relative w-28 aspect-video bg-black rounded-lg overflow-hidden shrink-0 shadow-md group-hover:shadow-lg transition-shadow">
+                                      <div className="relative w-20 aspect-video bg-black rounded-md overflow-hidden shrink-0 shadow-sm group-hover:shadow-md transition-shadow">
                                         <img
                                           src={`https://img.youtube.com/vi/${l.videoId}/mqdefault.jpg`}
                                           className="w-full h-full object-cover transition-transform group-hover:scale-105"
                                           alt={l.title}
                                         />
                                         {/* HOVER ACTIONS */}
-                                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1.5">
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                                           <Button
                                             size="icon"
                                             variant="secondary"
-                                            className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
+                                            className="h-6 w-6 bg-background/90 backdrop-blur-sm hover:bg-background shadow-sm"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               toggleComplete(p, l.id);
                                             }}
                                           >
-                                            <Check className="h-3.5 w-3.5" />
+                                            <Check className="h-3 w-3" />
                                           </Button>
 
                                           <Button
                                             size="icon"
                                             variant="secondary"
-                                            className="h-7 w-7 bg-background/90 backdrop-blur-sm hover:bg-background shadow-lg"
+                                            className="h-6 w-6 bg-background/90 backdrop-blur-sm hover:bg-background shadow-sm"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setFocusMode(true);
                                               setActive({ pid: p.id, lid: l.id });
                                             }}
                                           >
-                                            <Focus className="h-3.5 w-3.5" />
+                                            <Focus className="h-3 w-3" />
                                           </Button>
                                         </div>
 
                                         {l.completed && (
                                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-lg backdrop-blur-[1px]">
                                             <div className="bg-primary rounded-full p-1.5">
-                                              <Check className="text-primary-foreground h-5 w-5" />
+                                              <Check className="text-primary-foreground h-3 w-3" />
                                             </div>
                                           </div>
                                         )}
                                       </div>
 
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium line-clamp-2 leading-snug">{l.title}</p>
+                                        <p className="text-sm font-medium line-clamp-2 leading-tight">{l.title}</p>
                                         {l.watchTime && (
-                                          <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                                          <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
                                             <span>⏱️</span>
                                             <span>Watched: {l.watchTime} min</span>
                                           </p>
@@ -2327,22 +1825,23 @@ export default function Playlists() {
                                 ))}
                               </div>
 
-                              <div className="space-y-2 pt-2 border-t">
+                              <div className="space-y-2 pt-2 border-t px-1">
                                 <Input
                                   placeholder="Lecture title"
                                   value={newLectureTitle}
                                   onChange={(e) => setNewLectureTitle(e.target.value)}
-                                  className="text-sm"
+                                  className="h-8 text-xs"
                                 />
                                 <Input
                                   placeholder="YouTube link"
                                   value={newLectureUrl}
                                   onChange={(e) => setNewLectureUrl(e.target.value)}
-                                  className="text-sm"
+                                  className="h-8 text-xs"
                                 />
                                 <Button
                                   onClick={() => addLecture(p)}
-                                  className="w-full"
+                                  className="w-full h-8 text-xs"
+                                  size="sm"
                                 >
                                   Add lecture
                                 </Button>
@@ -2542,205 +2041,135 @@ export default function Playlists() {
 
                       {/* NOTES */}
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                          <h3 className="text-base font-bold flex items-center gap-2">
-                            <span className="text-xl">📝</span>
-                            Study Notes
-                          </h3>
-                          <div className="flex items-center gap-3">
-                            <div className="text-xs font-medium text-muted-foreground">
-                              {saveStatus === "typing" && "✍️ Typing…"}
-                              {saveStatus === "saving" && "💾 Saving…"}
-                              {saveStatus === "saved" && "✅ Saved"}
-                              {saveStatus === "idle" && ""}
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!localNotes.trim()}
-                              onClick={exportNotesPdf}
-                              className="gap-2"
-                            >
-                              <span>📄</span>
-                              Export PDF
-                            </Button>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {notesWordCount.words > 0 && (
-                              <span>{notesWordCount.words} words • {notesWordCount.characters} chars</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* NOTES TEMPLATES */}
-                        <div className="flex gap-2 flex-wrap">
-                          {noteTemplates.map((template) => (
-                            <Button
-                              key={template.name}
-                              size="sm"
-                              variant="outline"
-                              onClick={() => insertTemplate(template)}
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              {template.name}
-                            </Button>
-                          ))}
-                        </div>
-
-                        {/* TAG BUTTONS */}
-                        <div className="flex gap-2 flex-wrap">
-                          <Button
-                            size="sm"
-                            variant={activeTags.includes("important") ? "default" : "outline"}
-                            onClick={() => toggleTag("important")}
-                            className={`transition-all ${activeTags.includes("important") ? "shadow-md" : ""}`}
-                          >
-                            ⭐ Important
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant={activeTags.includes("formula") ? "default" : "outline"}
-                            onClick={() => toggleTag("formula")}
-                            className={`transition-all ${activeTags.includes("formula") ? "shadow-md" : ""}`}
-                          >
-                            ➕ Formula
-                          </Button>
-
-                          <Button
-                            size="sm"
-                            variant={activeTags.includes("doubt") ? "default" : "outline"}
-                            onClick={() => toggleTag("doubt")}
-                            className={`transition-all ${activeTags.includes("doubt") ? "shadow-md" : ""}`}
-                          >
-                            ❓ Doubt
-                          </Button>
-                        </div>
-
-                        {showMathPad && (
-                          <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-muted/50 border">
-                            <Button size="sm" variant="outline" onClick={() => insertAtCursor("$F = ma$")}>
-                              F = ma
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => insertAtCursor("$\\frac{a}{b}$")}>
-                              a / b
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => insertAtCursor("$\\sqrt{x}$")}>
-                              √x
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => insertAtCursor("$x^2$")}>
-                              x²
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => insertAtCursor("$\\pi$")}>
-                              π
-                            </Button>
-                          </div>
-                        )}
-
-                        {/* TIMESTAMP NOTES */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-semibold flex items-center gap-2">
-                              <Bookmark className="h-4 w-4" />
-                              Timestamp Bookmarks
-                            </h4>
-                            <Dialog open={showTimestampDialog} onOpenChange={setShowTimestampDialog}>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add Bookmark
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Add Timestamp Bookmark</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4 py-4">
-                                  <div>
-                                    <label className="text-sm font-medium mb-2 block">
-                                      Timestamp (format: MM:SS or seconds)
-                                    </label>
-                                    <Input
-                                      value={timestampInput}
-                                      onChange={(e) => setTimestampInput(e.target.value)}
-                                      placeholder="e.g., 5:30 or 330"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-sm font-medium mb-2 block">Note</label>
-                                    <Textarea
-                                      value={timestampNoteInput}
-                                      onChange={(e) => setTimestampNoteInput(e.target.value)}
-                                      placeholder="Add a note for this timestamp..."
-                                      rows={3}
-                                    />
-                                  </div>
-                                  <Button
-                                    onClick={() => {
-                                      const timeStr = timestampInput.trim();
-                                      let seconds = 0;
-
-                                      if (timeStr.includes(":")) {
-                                        const parts = timeStr.split(":").map(Number);
-                                        if (parts.length === 2) {
-                                          seconds = parts[0] * 60 + parts[1];
-                                        }
-                                      } else {
-                                        seconds = parseInt(timeStr) || 0;
-                                      }
-
-                                      if (seconds > 0 && timestampNoteInput.trim()) {
-                                        addTimestampNote(seconds, timestampNoteInput);
-                                        setTimestampInput("");
-                                        setTimestampNoteInput("");
-                                        setShowTimestampDialog(false);
-                                      }
-                                    }}
-                                    className="w-full"
-                                  >
-                                    Add Bookmark
+                        {/* EDITOR CONTAINER */}
+                        <div className="flex flex-col border-2 rounded-xl bg-background/50 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 relative">
+                          {/* TOOLBAR */}
+                          <div className="flex items-center justify-between p-2 bg-muted/30 border-b gap-2 overflow-x-auto scrollbar-none rounded-t-xl">
+                            <div className="flex items-center gap-1">
+                              {/* Templates */}
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-foreground">
+                                    <FileText className="h-4 w-4 mr-1.5" />
+                                    Templates
                                   </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                          {current && (current.timestampNotes || []).length > 0 && (
-                            <div className="space-y-2 p-3 rounded-lg bg-muted/30 border max-h-48 overflow-y-auto">
-                              {current.timestampNotes?.map((tn) => (
-                                <div
-                                  key={tn.id}
-                                  className="flex items-start justify-between gap-2 p-2 rounded bg-background border hover:bg-muted/50 transition-colors"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <button
-                                      onClick={() => jumpToTimestamp(tn.timestamp)}
-                                      className="text-sm font-medium text-primary hover:underline mb-1 block"
+                                </PopoverTrigger>
+                                <PopoverContent align="start" className="w-48 p-1">
+                                  <div className="flex flex-col gap-1">
+                                    {noteTemplates.map((t) => (
+                                      <Button key={t.name} variant="ghost" size="sm" className="justify-start h-8 font-normal" onClick={() => insertTemplate(t)}>
+                                        {t.name}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+
+                              <div className="w-px h-4 bg-border mx-1" />
+
+                              {/* Tags */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant={activeTags.includes("important") ? "secondary" : "ghost"}
+                                      size="icon"
+                                      className={cn("h-8 w-8", activeTags.includes("important") && "text-yellow-500 bg-yellow-500/10")}
+                                      onClick={() => toggleTag("important")}
                                     >
-                                      {formatTimestamp(tn.timestamp)}
-                                    </button>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">{tn.note}</p>
-                                  </div>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6 shrink-0"
-                                    onClick={() => deleteTimestampNote(tn.id)}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                      <Star className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Mark as Important</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
 
-                        {/* NOTES INPUT WITH SYMBOL KEYBOARD */}
-                        <div className="relative">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant={activeTags.includes("formula") ? "secondary" : "ghost"}
+                                      size="icon"
+                                      className={cn("h-8 w-8", activeTags.includes("formula") && "text-blue-500 bg-blue-500/10")}
+                                      onClick={() => toggleTag("formula")}
+                                    >
+                                      <Sparkles className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Mark as Formula</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant={activeTags.includes("doubt") ? "secondary" : "ghost"}
+                                      size="icon"
+                                      className={cn("h-8 w-8", activeTags.includes("doubt") && "text-red-500 bg-red-500/10")}
+                                      onClick={() => toggleTag("doubt")}
+                                    >
+                                      <AlertCircle className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Mark as Doubt</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              <div className="w-px h-4 bg-border mx-1" />
+
+                              {/* Timestamp Trigger */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowTimestampDialog(true)}>
+                                      <Bookmark className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Add Timestamp Bookmark</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+
+                              {/* Symbol Pad Toggle */}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant={showSymbolPad ? "secondary" : "ghost"}
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      ref={symbolButtonRef}
+                                      onClick={() => setShowSymbolPad(!showSymbolPad)}
+                                    >
+                                      <span className="text-lg leading-none font-serif">∑</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Math Symbols</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              {/* Save Status */}
+                              <span className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground hidden sm:inline-block">
+                                {saveStatus === "typing" && "Typing..."}
+                                {saveStatus === "saving" && "Saving..."}
+                                {saveStatus === "saved" && "Saved"}
+                              </span>
+                              {/* Export */}
+                              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={exportNotesPdf}>
+                                Export PDF
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* TEXTAREA */}
+                          <div className="relative bg-card">
                           <Textarea
                             id="notes-area"
                             value={localNotes}
                             onChange={(e) => updateNotesDebounced(e.target.value)}
-                            className="min-h-[280px] pr-12 text-sm leading-relaxed resize-none font-mono"
+                            className="min-h-[300px] border-0 focus-visible:ring-0 rounded-none resize-y p-4 font-mono text-sm leading-relaxed bg-transparent"
                             placeholder={`Write notes normally.
 
 Examples:
@@ -2748,24 +2177,20 @@ force = mass × acceleration
 angle = 90°
 area = πr²`}
                           />
+                          </div>
 
-                          {/* Keyboard icon (bottom-right) */}
-                          <button
-                            ref={symbolButtonRef}
-                            type="button"
-                            onClick={() => setShowSymbolPad(true)}
-                            className="absolute bottom-4 right-4 p-2 rounded-lg bg-background border shadow-md hover:bg-muted hover:scale-110 transition-all text-muted-foreground hover:text-primary"
-                            title="Symbol keyboard"
-                          >
-                            <span className="text-xl">⌨️</span>
-                          </button>
+                          {/* FOOTER INFO */}
+                          <div className="flex items-center justify-between px-3 py-1.5 bg-muted/20 border-t text-[10px] text-muted-foreground rounded-b-xl">
+                            <span>{notesWordCount.words} words • {notesWordCount.characters} chars</span>
+                            <span>Markdown supported</span>
+                          </div>
                         </div>
 
                         {/* SYMBOL PICKER */}
                         {showSymbolPad && (
                           <div
                             ref={symbolPopupRef}
-                            className="absolute bottom-20 right-0 z-50 w-[340px] max-h-[320px] overflow-y-auto rounded-xl border-2 bg-background shadow-2xl p-4 animate-in fade-in slide-in-from-bottom-2"
+                            className="absolute bottom-24 right-4 z-50 w-[340px] max-h-[320px] overflow-y-auto rounded-xl border-2 bg-background shadow-2xl p-4 animate-in fade-in slide-in-from-bottom-2"
                           >
                             <div className="space-y-4">
                               {Object.entries(SYMBOL_GROUPS).map(([group, symbols]) => (
@@ -2790,11 +2215,76 @@ area = πr²`}
                           </div>
                         )}
 
-                        {aiError && (
-                          <div className="p-4 rounded-xl border-2 border-red-500/50 bg-red-500/10">
-                            <p className="text-sm font-medium text-red-600 dark:text-red-400">{aiError}</p>
+                        {/* TIMESTAMP CHIPS */}
+                        {current.timestampNotes && current.timestampNotes.length > 0 && (
+                          <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+                            {current.timestampNotes.map((tn) => (
+                              <Badge
+                                key={tn.id}
+                                variant="outline"
+                                className="pl-2 pr-1 py-1 h-auto gap-2 hover:bg-muted cursor-pointer transition-colors group"
+                                onClick={() => jumpToTimestamp(tn.timestamp)}
+                              >
+                                <span className="font-mono text-xs text-primary font-bold">{formatTimestamp(tn.timestamp)}</span>
+                                <span className="max-w-[200px] truncate font-normal text-muted-foreground">{tn.note}</span>
+                                <Button size="icon" variant="ghost" className="h-4 w-4 ml-1 hover:text-destructive hover:bg-destructive/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); deleteTimestampNote(tn.id); }}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </Badge>
+                            ))}
                           </div>
                         )}
+
+                        {/* TIMESTAMP DIALOG */}
+                        <Dialog open={showTimestampDialog} onOpenChange={setShowTimestampDialog}>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Add Timestamp Bookmark</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">
+                                  Timestamp (format: MM:SS or seconds)
+                                </label>
+                                <Input
+                                  value={timestampInput}
+                                  onChange={(e) => setTimestampInput(e.target.value)}
+                                  placeholder="e.g., 5:30 or 330"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">Note</label>
+                                <Textarea
+                                  value={timestampNoteInput}
+                                  onChange={(e) => setTimestampNoteInput(e.target.value)}
+                                  placeholder="Add a note for this timestamp..."
+                                  rows={3}
+                                />
+                              </div>
+                              <Button
+                                onClick={() => {
+                                  const timeStr = timestampInput.trim();
+                                  let seconds = 0;
+                                  if (timeStr.includes(":")) {
+                                    const parts = timeStr.split(":").map(Number);
+                                    if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+                                  } else {
+                                    seconds = parseInt(timeStr) || 0;
+                                  }
+                                  if (seconds > 0 && timestampNoteInput.trim()) {
+                                    addTimestampNote(seconds, timestampNoteInput);
+                                    setTimestampInput("");
+                                    setTimestampNoteInput("");
+                                    setShowTimestampDialog(false);
+                                  }
+                                }}
+                                className="w-full"
+                              >
+                                Add Bookmark
+                              </Button>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
 
                         {aiSummary && (
                           <div className="p-4 rounded-xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-purple-500/5 whitespace-pre-line text-sm leading-relaxed">
@@ -2803,31 +2293,61 @@ area = πr²`}
                         )}
                       </div>
 
-                      <div className="flex flex-col gap-3 pt-2 border-t">
+                      <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t mt-4">
                         <Button
-                          onClick={() =>
-                            toggleComplete(
-                              playlists.find((p) => p.id === active!.pid)!,
-                              active!.lid
-                            )
-                          }
-                          className="w-full"
+                          onClick={() => {
+                            const p = active?.isAdmin
+                              ? adminPlaylists.find((p) => p.id === active.pid)
+                              : playlists.find((p) => p.id === active.pid);
+                            if (p) toggleComplete(p, active!.lid);
+                          }}
+                          className={cn(
+                            "flex-1 h-auto py-3 px-4 justify-start gap-3 relative overflow-hidden group",
+                            current.completed
+                              ? "border-2 bg-background hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                              : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20"
+                          )}
                           variant={current.completed ? "outline" : "default"}
                         >
-                          {current.completed ? "✓ Mark as unwatched" : "✓ Mark as watched"}
+                          <div className={cn(
+                            "p-2 rounded-full transition-colors",
+                            current.completed ? "bg-muted group-hover:bg-muted/80" : "bg-white/20"
+                          )}>
+                            <Check className="h-4 w-4" />
+                          </div>
+                          <div className="flex flex-col items-start text-left">
+                            <span className="text-[10px] uppercase tracking-wider font-medium opacity-80">
+                              {current.completed ? "Completed" : "Current Lecture"}
+                            </span>
+                            <span className="text-sm font-bold">
+                              {current.completed ? "Mark as Unwatched" : "Mark as Watched"}
+                            </span>
+                          </div>
                         </Button>
 
-                        {nextLecture && (
-                          <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20">
-                            <Sparkles className="h-5 w-5 text-primary shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                                Next up
-                              </p>
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {nextLecture.title}
-                              </p>
+                        {nextLecture ? (
+                          <div
+                            className="flex-1 flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-accent/50 transition-all cursor-pointer group relative overflow-hidden"
+                            onClick={goNext}
+                          >
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="p-2 rounded-full bg-primary/10 text-primary shrink-0 group-hover:scale-110 transition-transform">
+                              <Sparkles className="h-4 w-4" />
                             </div>
+                            <div className="flex-1 min-w-0 flex flex-col items-start">
+                              <span className="text-[10px] uppercase tracking-wider font-medium text-muted-foreground">
+                                Up Next
+                              </span>
+                              <span className="text-sm font-bold truncate w-full">
+                                {nextLecture.title}
+                              </span>
+                            </div>
+                            <ArrowUp className="h-4 w-4 text-muted-foreground rotate-90 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-dashed text-muted-foreground bg-muted/20">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span className="text-sm font-medium">Playlist Completed</span>
                           </div>
                         )}
                       </div>
