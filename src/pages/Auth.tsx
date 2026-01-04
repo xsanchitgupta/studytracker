@@ -39,19 +39,19 @@ const SpotlightInput = ({ icon: Icon, className, containerClassName, ...props }:
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setOpacity(1)}
       onMouseLeave={() => setOpacity(0)}
-      className={cn("relative rounded-xl group", containerClassName)}
+      className={cn("relative rounded-2xl group shadow-lg transition-all duration-300", containerClassName)}
     >
       <div 
-        className="pointer-events-none absolute -inset-px rounded-xl opacity-0 transition-opacity duration-300 z-0"
+        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition-opacity duration-300 z-0"
         style={{
           opacity,
-          background: `radial-gradient(400px circle at ${position.x}px ${position.y}px, rgba(124, 58, 237, 0.3), transparent 40%)`,
+          background: `radial-gradient(500px circle at ${position.x}px ${position.y}px, rgba(168,85,247,0.25), transparent 50%)`,
         }}
       />
-      <div className="relative z-10 bg-background/80 backdrop-blur-xl rounded-xl border border-input transition-all group-focus-within:border-primary group-focus-within:ring-4 group-focus-within:ring-primary/10">
-        <Icon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+      <div className="relative z-10 bg-background/80 backdrop-blur-2xl rounded-2xl border border-input/60 shadow-[0_2px_24px_0_rgba(124,58,237,0.08)] transition-all group-focus-within:border-primary group-focus-within:ring-4 group-focus-within:ring-primary/20">
+        <Icon className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
         <Input 
-          className={cn("pl-10 h-11 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0", className)} 
+          className={cn("pl-12 h-12 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base font-medium tracking-wide", className)} 
           {...props} 
         />
       </div>
@@ -62,17 +62,17 @@ const SpotlightInput = ({ icon: Icon, className, containerClassName, ...props }:
 // --- LIQUID TABS ---
 const LiquidTabs = ({ activeTab, onTabChange }: { activeTab: string, onTabChange: (val: string) => void }) => {
   return (
-    <div className="relative grid grid-cols-2 p-1 bg-muted/40 rounded-xl h-12">
+    <div className="relative grid grid-cols-2 p-1 bg-gradient-to-r from-primary/10 via-purple-200/10 to-primary/10 rounded-2xl h-14 shadow-lg">
       <div 
         className={cn(
-          "absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-background shadow-sm transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1.0)]",
-          activeTab === "signin" ? "left-1" : "left-[calc(50%+4px)]"
+          "absolute top-1 bottom-1 w-[calc(50%-6px)] rounded-xl bg-gradient-to-r from-primary/80 to-purple-500/80 shadow-xl blur-[1px] transition-all duration-400 ease-[cubic-bezier(0.25,0.1,0.25,1.0)]",
+          activeTab === "signin" ? "left-1" : "left-[calc(50%+6px)]"
         )} 
       />
-      <button type="button" onClick={() => onTabChange("signin")} className={cn("relative z-10 text-sm font-medium transition-colors duration-300", activeTab === "signin" ? "text-foreground" : "text-muted-foreground")}>
+      <button type="button" onClick={() => onTabChange("signin")} className={cn("relative z-10 text-base font-semibold transition-colors duration-300 tracking-wide", activeTab === "signin" ? "text-white drop-shadow-lg" : "text-muted-foreground")}>
         Sign In
       </button>
-      <button type="button" onClick={() => onTabChange("signup")} className={cn("relative z-10 text-sm font-medium transition-colors duration-300", activeTab === "signup" ? "text-foreground" : "text-muted-foreground")}>
+      <button type="button" onClick={() => onTabChange("signup")} className={cn("relative z-10 text-base font-semibold transition-colors duration-300 tracking-wide", activeTab === "signup" ? "text-white drop-shadow-lg" : "text-muted-foreground")}>
         Create Account
       </button>
     </div>
@@ -84,15 +84,15 @@ const CosmicButton = ({ children, isLoading, ...props }: any) => {
   return (
     <button 
       className={cn(
-        "relative w-full h-12 rounded-xl overflow-hidden group transition-all hover:scale-[1.02] active:scale-[0.98]",
+        "relative w-full h-14 rounded-2xl overflow-hidden group transition-all hover:scale-[1.025] active:scale-[0.98] shadow-xl",
         isLoading && "opacity-80 cursor-not-allowed"
       )}
       disabled={isLoading}
       {...props}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-primary via-purple-600 to-primary bg-[length:200%_100%] animate-[shimmer_3s_infinite_linear]" />
-      <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.3)_50%,transparent_75%)] bg-[length:250%_250%,100%_100%] bg-no-repeat transition-[background-position] duration-0 ease-linear group-hover:bg-[position:200%_0,0_0] group-hover:duration-[1500ms]" />
-      <div className="relative flex items-center justify-center gap-2 text-primary-foreground font-semibold">{children}</div>
+      <div className="absolute inset-0 bg-gradient-to-r from-primary via-fuchsia-500 to-primary bg-[length:300%_100%] animate-[shimmer_2.5s_infinite_linear]" />
+      <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_40%,rgba(255,255,255,0.18)_50%,transparent_60%)] bg-[length:250%_250%,100%_100%] bg-no-repeat transition-[background-position] duration-0 ease-linear group-hover:bg-[position:200%_0,0_0] group-hover:duration-[1200ms]" />
+      <div className="relative flex items-center justify-center gap-2 text-lg text-primary-foreground font-bold tracking-wide drop-shadow-lg">{children}</div>
     </button>
   );
 };
@@ -102,11 +102,11 @@ const GlassButton = ({ children, ...props }: any) => {
   return (
     <button
       type="button"
-      className="relative w-full h-12 rounded-xl border-2 border-border bg-transparent overflow-hidden group transition-all hover:border-primary/50 hover:bg-muted/30"
+      className="relative w-full h-14 rounded-2xl border-2 border-border/70 bg-white/30 dark:bg-black/20 backdrop-blur-xl overflow-hidden group transition-all hover:border-primary/60 hover:bg-primary/10 shadow-lg"
       {...props}
     >
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
-      <div className="relative flex items-center justify-center gap-2 font-medium text-foreground">{children}</div>
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.18)_0%,transparent_70%)]" />
+      <div className="relative flex items-center justify-center gap-2 font-semibold text-foreground text-base">{children}</div>
     </button>
   );
 };
@@ -115,10 +115,10 @@ const GlassButton = ({ children, ...props }: any) => {
 const LiveTicker = () => {
   const [index, setIndex] = useState(0);
   const events = [
-    { icon: Trophy, text: "Alex just earned 'Math Wizard'", color: "text-yellow-500" },
-    { icon: Zap, text: "Sarah hit a 7-day streak!", color: "text-blue-500" },
-    { icon: Star, text: "David aced Physics 101", color: "text-purple-500" },
-    { icon: TrendingUp, text: "Community study hours: 10k+", color: "text-green-500" },
+    { icon: Trophy, text: "Alex just earned 'Math Wizard'", color: "text-yellow-400 drop-shadow-glow" },
+    { icon: Zap, text: "Sarah hit a 7-day streak!", color: "text-blue-400 drop-shadow-glow" },
+    { icon: Star, text: "David aced Physics 101", color: "text-purple-400 drop-shadow-glow" },
+    { icon: TrendingUp, text: "Community study hours: 10k+", color: "text-green-400 drop-shadow-glow" },
   ];
 
   useEffect(() => {
@@ -129,13 +129,13 @@ const LiveTicker = () => {
   }, []);
 
   return (
-    <div className="relative h-12 overflow-hidden">
+    <div className="relative h-14 overflow-hidden">
       {events.map((event, i) => (
-        <div key={i} className={cn("absolute inset-0 flex items-center gap-3 transition-all duration-500 transform", i === index ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0")}>
-          <div className="p-2 rounded-full bg-white/10 backdrop-blur-md">
-            <event.icon className={cn("h-4 w-4", event.color)} />
+        <div key={i} className={cn("absolute inset-0 flex items-center gap-4 transition-all duration-700 transform", i === index ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0")}>
+          <div className="p-2 rounded-full bg-gradient-to-br from-white/20 to-primary/10 shadow-lg backdrop-blur-md">
+            <event.icon className={cn("h-5 w-5", event.color)} />
           </div>
-          <span className="text-sm font-medium text-white/80">{event.text}</span>
+          <span className="text-base font-semibold text-white/90 tracking-wide drop-shadow">{event.text}</span>
         </div>
       ))}
     </div>
@@ -160,11 +160,11 @@ const MobileTicker = () => {
   }, []);
 
   return (
-    <div className="mb-6 flex justify-center lg:hidden">
-       <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-xs font-medium text-primary border border-primary/20 animate-in fade-in slide-in-from-top-2">
-          <span className="relative flex h-2 w-2">
+    <div className="mb-8 flex justify-center lg:hidden">
+       <div className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-gradient-to-r from-primary/20 via-fuchsia-400/10 to-primary/20 text-sm font-semibold text-primary border border-primary/30 shadow-lg animate-in fade-in slide-in-from-top-2">
+          <span className="relative flex h-3 w-3">
              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+             <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
           </span>
           <span key={index} className="animate-in fade-in slide-in-from-bottom-1 duration-300">{events[index]}</span>
        </div>
@@ -249,106 +249,109 @@ const Auth = () => {
   if (!mounted || authLoading) return null;
 
   return (
-    <div className={cn("min-h-screen w-full flex overflow-hidden font-sans selection:bg-primary/30",
-      theme === "dark" ? "bg-black text-white" : "bg-white text-zinc-950"
+    <div className={cn(
+      "min-h-screen w-full flex overflow-hidden font-sans selection:bg-primary/30",
+      theme === "dark" ? "bg-gradient-to-br from-black via-zinc-900 to-[#1e1b4b] text-white" : "bg-gradient-to-br from-white via-zinc-100 to-[#f3e8ff] text-zinc-950"
     )}>
       <style>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
+        .drop-shadow-glow { filter: drop-shadow(0 0 8px rgba(168,85,247,0.7)); }
       `}</style>
 
       {/* LEFT SIDE - VISUALS (Desktop Only) */}
-      <div className="hidden lg:flex w-1/2 relative bg-[#050505] items-center justify-center overflow-hidden border-r border-white/5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,_#1e1b4b_0%,_transparent_50%)]" />
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10" />
-        <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[100px] animate-pulse duration-[5000ms]" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-purple-500/10 rounded-full blur-[80px] animate-pulse duration-[7000ms]" />
+      <div className="hidden lg:flex w-1/2 relative items-center justify-center overflow-hidden border-r border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,_#1e1b4b_0%,_transparent_60%)]" />
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
+        <div className="absolute top-1/3 left-1/4 w-[28rem] h-[28rem] bg-gradient-to-br from-primary/30 via-fuchsia-400/20 to-purple-500/20 rounded-full blur-[120px] animate-pulse duration-[5000ms]" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-gradient-to-br from-purple-500/20 to-primary/10 rounded-full blur-[90px] animate-pulse duration-[7000ms]" />
+        <div className="absolute -top-24 -right-24 w-96 h-96 bg-gradient-to-br from-fuchsia-400/20 to-primary/10 rounded-full blur-[120px] opacity-60" />
 
-        <div className="relative z-10 max-w-md space-y-8">
-          <div className="p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-2xl shadow-2xl animate-in slide-in-from-left-8 duration-1000 hover:scale-105 transition-transform cursor-default">
-            <div className="flex items-center gap-3 mb-6">
-               <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-               <p className="text-xs font-medium text-white/50 uppercase tracking-widest">Live Updates</p>
+        <div className="relative z-10 max-w-md space-y-10">
+          <div className="p-10 rounded-3xl bg-white/10 border border-white/20 backdrop-blur-3xl shadow-2xl animate-in slide-in-from-left-8 duration-1000 hover:scale-105 transition-transform cursor-default">
+            <div className="flex items-center gap-4 mb-8">
+               <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse shadow-lg" />
+               <p className="text-xs font-bold text-white/60 uppercase tracking-widest">Live Updates</p>
             </div>
             <LiveTicker />
-            <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-end">
+            <div className="mt-8 pt-8 border-t border-white/10 flex justify-between items-end">
                <div>
-                  <p className="text-3xl font-bold text-white">98%</p>
-                  <p className="text-xs text-white/40">Success Rate</p>
+                  <p className="text-4xl font-extrabold text-white drop-shadow-glow">98%</p>
+                  <p className="text-xs text-white/50 font-medium">Success Rate</p>
                </div>
-               <div className="flex -space-x-2">
+               <div className="flex -space-x-3">
                   {[1,2,3,4].map(i => (
-                    <div key={i} className="h-8 w-8 rounded-full border-2 border-[#050505] bg-gradient-to-br from-gray-700 to-gray-900" />
+                    <div key={i} className="h-10 w-10 rounded-full border-2 border-[#050505] bg-gradient-to-br from-gray-700 to-gray-900 shadow-lg ring-2 ring-primary/20" />
                   ))}
                </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-5xl font-bold tracking-tight text-white">
+          <div className="space-y-3">
+            <h1 className="text-6xl font-extrabold tracking-tight text-white leading-tight drop-shadow-glow">
               Focus on <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">what matters.</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-fuchsia-400 to-purple-400 animate-gradient-x">what matters.</span>
             </h1>
-            <p className="text-lg text-white/50 font-light max-w-sm">
-              We handle the organization. You handle the learning.
+            <p className="text-xl text-white/70 font-light max-w-sm drop-shadow">
+              We handle the organization.<br/>You handle the learning.
             </p>
           </div>
         </div>
       </div>
 
       {/* RIGHT SIDE - FORM */}
-      <div className="w-full lg:w-1/2 flex flex-col relative bg-background">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] opacity-30 dark:opacity-5" />
+      <div className="w-full lg:w-1/2 flex flex-col relative bg-background/80">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(#e5e7eb_1.5px,transparent_1.5px)] [background-size:18px_18px] opacity-40 dark:opacity-10" />
 
         {/* Navbar */}
-        <div className="flex items-center justify-between p-6">
-           <div className="flex items-center gap-2 cursor-pointer group" onClick={() => navigate("/")}>
-              <div className="bg-primary/10 p-2 rounded-xl text-primary transition-transform group-hover:rotate-12">
-                <BookOpen className="h-5 w-5" />
+        <div className="flex items-center justify-between p-8">
+           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate("/")}>
+              <div className="bg-gradient-to-br from-primary/20 to-fuchsia-400/20 p-3 rounded-2xl text-primary shadow-lg transition-transform group-hover:rotate-12">
+                <BookOpen className="h-6 w-6" />
               </div>
-              <span className="font-bold text-lg tracking-tight">StudySync</span>
+              <span className="font-extrabold text-2xl tracking-tight bg-gradient-to-r from-primary via-fuchsia-400 to-purple-400 bg-clip-text text-transparent drop-shadow-glow">StudySync</span>
            </div>
            <ThemeToggle />
         </div>
 
         {/* Form Container */}
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-[400px] animate-in slide-in-from-bottom-4 duration-700">
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="w-full max-w-[440px] animate-in slide-in-from-bottom-4 duration-700 bg-white/70 dark:bg-zinc-900/80 rounded-3xl shadow-2xl border border-zinc-200/60 dark:border-zinc-800/60 backdrop-blur-2xl px-8 py-10">
             
             {/* MOBILE ONLY TICKER */}
             <MobileTicker />
 
             {isVerificationSent ? (
-              <div className="text-center space-y-6">
-                 <div className="w-20 h-20 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-green-500/5 animate-[bounce_1s_infinite]">
-                    <Mail className="h-10 w-10" />
+              <div className="text-center space-y-8">
+                 <div className="w-24 h-24 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-8 ring-4 ring-green-500/10 animate-[bounce_1.2s_infinite] shadow-lg">
+                    <Mail className="h-12 w-12" />
                  </div>
                  <div>
-                    <h2 className="text-2xl font-bold">Check your inbox</h2>
-                    <p className="text-muted-foreground mt-2">
-                       We sent a verification link to <br/><span className="text-foreground font-medium">{email}</span>
+                    <h2 className="text-3xl font-extrabold">Check your inbox</h2>
+                    <p className="text-muted-foreground mt-3 text-base">
+                       We sent a verification link to <br/><span className="text-foreground font-semibold">{email}</span>
                     </p>
                  </div>
-                 <button onClick={() => setIsVerificationSent(false)} className="text-sm text-primary hover:underline flex items-center justify-center gap-2 w-full">
-                    <ArrowLeft className="h-4 w-4" /> Back to Login
+                 <button onClick={() => setIsVerificationSent(false)} className="text-base text-primary hover:underline flex items-center justify-center gap-2 w-full font-semibold">
+                    <ArrowLeft className="h-5 w-5" /> Back to Login
                  </button>
               </div>
             ) : (
               <>
-                <div className="mb-8">
-                   <h2 className="text-3xl font-bold tracking-tight mb-2">Get started</h2>
-                   <p className="text-muted-foreground">Sign in to sync your progress across devices.</p>
+                <div className="mb-10">
+                   <h2 className="text-4xl font-extrabold tracking-tight mb-3 bg-gradient-to-r from-primary via-fuchsia-400 to-purple-400 bg-clip-text text-transparent drop-shadow-glow">Get started</h2>
+                   <p className="text-muted-foreground text-base font-medium">Sign in to sync your progress across devices.</p>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-8">
                   <LiquidTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
                   {activeTab === "signin" ? (
-                     <form onSubmit={handleSignIn} className="space-y-4 animate-in fade-in duration-300">
+                     <form onSubmit={handleSignIn} className="space-y-5 animate-in fade-in duration-300">
                         <div className="space-y-2">
-                           <Label>Email</Label>
+                           <Label className="text-base font-semibold">Email</Label>
                            <SpotlightInput 
                              icon={Mail}
                              type="email" 
@@ -360,9 +363,9 @@ const Auth = () => {
                            />
                         </div>
                         <div className="space-y-2">
-                           <div className="flex justify-between">
-                              <Label>Password</Label>
-                              <button type="button" onClick={handleForgotPassword} className="text-xs font-medium text-primary hover:text-purple-500 transition-colors">Forgot password?</button>
+                           <div className="flex justify-between items-center">
+                              <Label className="text-base font-semibold">Password</Label>
+                              <button type="button" onClick={handleForgotPassword} className="text-xs font-bold text-primary hover:text-fuchsia-500 transition-colors underline underline-offset-2">Forgot password?</button>
                            </div>
                            <SpotlightInput 
                              icon={Lock}
@@ -375,13 +378,13 @@ const Auth = () => {
                            />
                         </div>
                         <CosmicButton type="submit" isLoading={isLoading}>
-                          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign In"}
+                          {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : "Sign In"}
                         </CosmicButton>
                      </form>
                   ) : (
-                     <form onSubmit={handleSignUp} className="space-y-4 animate-in fade-in duration-300">
+                     <form onSubmit={handleSignUp} className="space-y-5 animate-in fade-in duration-300">
                         <div className="space-y-2">
-                           <Label>Full Name</Label>
+                           <Label className="text-base font-semibold">Full Name</Label>
                            <SpotlightInput 
                              icon={User}
                              placeholder="Vedant Pathak" 
@@ -392,7 +395,7 @@ const Auth = () => {
                            />
                         </div>
                         <div className="space-y-2">
-                           <Label>Email</Label>
+                           <Label className="text-base font-semibold">Email</Label>
                            <SpotlightInput 
                              icon={Mail}
                              type="email" 
@@ -404,7 +407,7 @@ const Auth = () => {
                            />
                         </div>
                         <div className="space-y-2">
-                           <Label>Password</Label>
+                           <Label className="text-base font-semibold">Password</Label>
                            <SpotlightInput 
                              icon={Lock}
                              type="password" 
@@ -417,26 +420,27 @@ const Auth = () => {
                            />
                         </div>
                         <CosmicButton type="submit" isLoading={isLoading}>
-                          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Create Account"}
+                          {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : "Create Account"}
                         </CosmicButton>
                      </form>
                   )}
 
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/60" /></div>
-                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground font-medium">Or</span></div>
+                  <div className="relative my-8">
+                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border/70" /></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-3 text-muted-foreground font-bold tracking-widest">Or</span></div>
                   </div>
 
                   <GlassButton onClick={handleGoogleSignIn} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="mr-2 h-5 w-5 text-orange-500" />}
+                    {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="mr-2 h-6 w-6 text-orange-500" />}
                     Continue with Google
                   </GlassButton>
                 </div>
               </>
             )}
             
-            <p className="text-center text-xs text-muted-foreground pt-4">
-              Protected by reCAPTCHA and subject to the <br/>StudySync <span className="underline cursor-pointer hover:text-primary">Privacy Policy</span>.
+            <p className="text-center text-xs text-muted-foreground pt-6 font-medium">
+              Protected by reCAPTCHA and subject to the <br/>
+              <span className="underline cursor-pointer hover:text-primary font-semibold">StudySync Privacy Policy</span>.
             </p>
           </div>
         </div>
