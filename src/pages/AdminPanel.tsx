@@ -555,7 +555,7 @@ export default function AdminPanel() {
         : "bg-gradient-to-br from-background via-background to-muted/20"
     )}>
       {/* Header */}
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-x1 transition-all duration-300",
+      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
         theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
       )}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -589,7 +589,7 @@ export default function AdminPanel() {
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Debug Info - Only show if role doesn't match */}
         {profile && profile.role !== "admin" && (
-          <Card className={cn("mb-6 border-2 border-yellow-500/50 backdrop-blur-x1",
+          <Card className={cn("mb-6 border-2 border-yellow-500/50 backdrop-blur-xl",
             theme === "dark" ? "bg-yellow-500/10 border-yellow-500/30" : "bg-yellow-50 border-yellow-300"
           )}>
             <CardContent className="p-4">
@@ -651,7 +651,7 @@ export default function AdminPanel() {
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -672,7 +672,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -741,7 +741,7 @@ export default function AdminPanel() {
           <TabsContent value="users" className="space-y-4">
             {/* Bulk Actions */}
             {selectedUsers.size > 0 && (
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardContent className="p-4">
@@ -775,7 +775,7 @@ export default function AdminPanel() {
               </Card>
             )}
 
-            <Card className={cn("backdrop-blur-x1 border",
+            <Card className={cn("backdrop-blur-xl border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -932,7 +932,7 @@ export default function AdminPanel() {
           {/* Playlists Tab */}
           <TabsContent value="playlists" className="space-y-4">
             {/* Create New Playlist */}
-            <Card className={cn("backdrop-blur-x1 border",
+            <Card className={cn("backdrop-blur-xl border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -975,7 +975,7 @@ export default function AdminPanel() {
 
             {/* Playlists List */}
             {playlistLoading ? (
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardContent className="py-12 text-center">
@@ -984,7 +984,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
             ) : filteredPlaylists.length === 0 ? (
-              <Card className={cn("backdrop-blur-x1 border text-center py-12",
+              <Card className={cn("backdrop-blur-xl border text-center py-12",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardContent>
@@ -995,7 +995,7 @@ export default function AdminPanel() {
             ) : (
               <div className="space-y-4">
                 {filteredPlaylists.map((p) => (
-                  <Card key={p.id} className={cn("backdrop-blur-x1 border",
+                  <Card key={p.id} className={cn("backdrop-blur-xl border",
                     theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
                   )}>
                     <CardHeader className="flex flex-row justify-between items-start">
@@ -1146,7 +1146,7 @@ export default function AdminPanel() {
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-4">
             <div className="grid md:grid-cols-2 gap-6">
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -1175,7 +1175,7 @@ export default function AdminPanel() {
                 </CardContent>
               </Card>
 
-              <Card className={cn("backdrop-blur-x1 border",
+              <Card className={cn("backdrop-blur-xl border",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
               )}>
                 <CardHeader>
@@ -1215,7 +1215,7 @@ export default function AdminPanel() {
 
           {/* Sync Tab */}
           <TabsContent value="sync" className="space-y-4">
-            <Card className={cn("backdrop-blur-x1 border",
+            <Card className={cn("backdrop-blur-xl border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -1279,7 +1279,7 @@ export default function AdminPanel() {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-4">
-            <Card className={cn("backdrop-blur-x1 border",
+            <Card className={cn("backdrop-blur-xl border",
               theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
             )}>
               <CardHeader>
@@ -1381,7 +1381,7 @@ function StatCard({ icon: Icon, label, value, color }: {
   const { theme } = useTheme();
   
   return (
-    <Card className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
+    <Card className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden",
       theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
     )}>
       <CardContent className="p-4">
@@ -1412,7 +1412,7 @@ function QuickActionCard({ icon: Icon, title, description, onClick, color }: {
   
   return (
     <Card 
-      className={cn("backdrop-blur-x1 border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] cursor-pointer",
+      className={cn("backdrop-blur-xl border transition-all duration-300 hover:shadow-xl hover:scale-[1.02] cursor-pointer",
         theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border"
       )}
       onClick={onClick}

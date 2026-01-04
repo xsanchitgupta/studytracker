@@ -36,7 +36,8 @@ export default function Layout() {
   // We hide the global header/footer on these pages because they have their own.
   const isLandingPage = location.pathname === "/";
   const isAuthPage = location.pathname === "/auth";
-  const isStandalonePage = isLandingPage || isAuthPage;
+  const isChatPage = location.pathname === "/chat";
+  const isStandalonePage = isLandingPage || isAuthPage || isChatPage;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);

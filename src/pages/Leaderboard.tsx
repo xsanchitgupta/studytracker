@@ -1,542 +1,340 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, onSnapshot, query, Timestamp } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { getEarnedBadges } from "@/lib/badges";
 import { useTheme } from "@/contexts/ThemeContext";
-
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-
-import {
-  BookOpen,
-  Target,
-  Trophy,
-  MessageCircle,
-  Play,
-  TrendingUp,
-  Clock,
-  LogOut,
-  Settings,
-  Bell,
-  Flame,
-  Star,
-  Brain,
-  AlertCircle,
-  Medal,
-  ArrowUpRight,
-  BarChart3,
-  Calendar,
-  Zap
+import { 
+  ArrowLeft, Trophy, Medal, Crown, TrendingUp, 
+  Flame, Clock, Target, BookOpen, Brain, Zap, User, Star, Award 
 } from "lucide-react";
 
-type SubGoal = { id: string; completed: boolean };
+// --- TYPES ---
+interface LeaderboardUser {
+  uid: string;
+  name: string;
+  email: string;
+  photoURL?: string;
+  score: number;
+  watchedLectures: number;
+  totalMinutes: number;
+  completedGoals: number;
+  totalFlashcards: number;
+  studyStreak: number;
+}
 
-type Goal = {
-  id: string;
-  title: string;
-  subGoals: SubGoal[];
-  createdAt?: Timestamp;
-  deadline?: number; // New field from Enhanced Goals
-};
+// --- VISUAL HELPERS ---
 
-type VideoActivity = {
-  id: string;
-  title: string;
-  videoId: string;
-  watchTime?: number;
-  completed?: boolean;
-  updatedAt?: Timestamp;
-};
+const SpotlightCard = ({ children, className = "", glowColor = "rgba(120, 119, 198, 0.1)" }: any) => {
+  const divRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [opacity, setOpacity] = useState(0);
 
-export default function Dashboard() {
-  const { user, logout } = useAuth();
-  const { theme } = useTheme();
-  const navigate = useNavigate();
-
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [videos, setVideos] = useState<VideoActivity[]>([]);
-  const [recentActivity, setRecentActivity] = useState<VideoActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // -------- FETCH DATA --------
-  useEffect(() => {
-    if (!user) return;
-    
-    // Fetch Goals
-    const qGoals = query(collection(db, "users", user.uid, "goals"));
-    const unsubGoals = onSnapshot(qGoals, snap => {
-      const data: Goal[] = snap.docs.map(d => {
-        const raw = d.data() as any;
-        return {
-          id: d.id,
-          title: raw.title ?? "Untitled Goal",
-          subGoals: Array.isArray(raw.subGoals) ? raw.subGoals : [],
-          createdAt: raw.createdAt,
-          deadline: raw.deadline
-        };
-      });
-      setGoals(data);
-    });
-
-    // Fetch Playlists/Videos
-    const qPlaylists = query(collection(db, "users", user.uid, "playlists"));
-    const unsubPlaylists = onSnapshot(qPlaylists, snap => {
-      const vids: VideoActivity[] = [];
-      snap.docs.forEach(d => {
-        const raw = d.data() as any;
-        if (Array.isArray(raw.lectures)) {
-          raw.lectures.forEach((l: any) => {
-            vids.push({
-              id: l.id,
-              title: l.title,
-              videoId: l.videoId,
-              watchTime: l.watchTime || 0,
-              completed: l.completed || false,
-              updatedAt: raw.updatedAt, // Approximate last access from playlist
-            });
-          });
-        }
-      });
-      setVideos(vids);
-      
-      // Sort for recent activity (simplified)
-      const sorted = vids
-        .filter(v => v.updatedAt)
-        .sort((a, b) => b.updatedAt!.toMillis() - a.updatedAt!.toMillis())
-        .slice(0, 5);
-      setRecentActivity(sorted);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubGoals();
-      unsubPlaylists();
-    };
-  }, [user]);
-
-  // -------- COMPUTED STATS --------
-  const { completedGoals, totalGoals, weeklyHours, streak, overdueCount, badgeCount, weeklyData, monthlyProgress } = useMemo(() => {
-    // Goals Stats
-    let completed = 0;
-    let overdue = 0;
-    const now = Date.now();
-
-    goals.forEach(g => {
-      const isComplete = g.subGoals.length > 0 && g.subGoals.every(sg => sg.completed);
-      if (isComplete) completed++;
-      if (!isComplete && g.deadline && g.deadline < now) overdue++;
-    });
-
-    // Activity Stats
-    const days = new Set(
-      videos
-        .filter(v => v.updatedAt)
-        .map(v => v.updatedAt!.toDate().toDateString())
-    );
-
-    let streakCount = 0;
-    const today = new Date();
-    // Simple streak logic: check consecutive days backwards
-    for (let i = 0; ; i++) {
-      const d = new Date();
-      d.setDate(today.getDate() - i);
-      if (days.has(d.toDateString())) streakCount++;
-      else if (i > 0) break; // Allow gap if checking today and no activity *yet*
-    }
-
-    // Weekly Hours
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const activeVideos = videos.filter(v => v.updatedAt && v.updatedAt.toDate() >= weekAgo);
-    
-    // Weekly data for chart (last 7 days)
-    const weeklyData = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dayVideos = videos.filter(v => {
-        if (!v.updatedAt) return false;
-        const vDate = v.updatedAt.toDate();
-        return vDate.toDateString() === date.toDateString();
-      });
-      weeklyData.push({
-        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-        value: dayVideos.length,
-        date: date.toDateString()
-      });
-    }
-    
-    // Monthly progress (last 30 days)
-    const monthAgo = new Date();
-    monthAgo.setDate(monthAgo.getDate() - 30);
-    const monthlyVideos = videos.filter(v => v.updatedAt && v.updatedAt.toDate() >= monthAgo);
-    const monthlyProgress = Math.min(100, (monthlyVideos.length / 30) * 100);
-    
-    // Badge Calculation
-    const totalMinutes = videos.reduce((acc, v) => acc + (v.watchTime || 0), 0);
-    const watchedLectures = videos.filter(v => v.completed).length;
-    const earnedBadges = getEarnedBadges({ watchedLectures, totalMinutes, completedGoals: completed });
-
-    return {
-      completedGoals: completed,
-      totalGoals: goals.length,
-      weeklyHours: activeVideos.length === 0 ? "0h" : `${(activeVideos.length * 0.5).toFixed(1)}h`,
-      streak: streakCount,
-      overdueCount: overdue,
-      badgeCount: earnedBadges.length,
-      weeklyData,
-      monthlyProgress
-    };
-  }, [goals, videos]);
-
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading dashboard...</div>;
-  }
-
-  // Updated Actions with new routes
-  const quickActions = [
-    { label: "Study Goals", icon: Target, href: "/goals", color: "bg-gradient-to-br from-green-500 to-emerald-600" },
-    { label: "Playlists", icon: Play, href: "/playlists", color: "bg-gradient-to-br from-purple-500 to-violet-600" },
-    { label: "Flashcards", icon: Brain, href: "/flashcards", color: "bg-gradient-to-br from-blue-500 to-cyan-600" },
-    { label: "Leaderboard", icon: Trophy, href: "/leaderboard", color: "bg-gradient-to-br from-yellow-500 to-orange-600" },
-    { label: "Chat", icon: MessageCircle, href: "/chat", color: "bg-gradient-to-br from-pink-500 to-rose-600" },
-    { label: "Performance", icon: TrendingUp, href: "/performance", color: "bg-gradient-to-br from-indigo-500 to-purple-600" },
-  ];
-
-  const maxWeeklyValue = Math.max(...weeklyData.map(d => d.value), 1);
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!divRef.current) return;
+    const rect = divRef.current.getBoundingClientRect();
+    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  };
 
   return (
-    <div className={cn("min-h-screen transition-colors duration-300",
-      theme === "dark" 
-        ? "bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background"
-        : "bg-gradient-to-br from-background via-background to-muted/20"
+    <div
+      ref={divRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setOpacity(1)}
+      onMouseLeave={() => setOpacity(0)}
+      className={cn(
+        "relative overflow-hidden rounded-3xl border bg-background/50 backdrop-blur-xl transition-all duration-500 shadow-2xl",
+        className
+      )}
+    >
+      <div
+        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 hidden md:block z-0"
+        style={{ opacity, background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, ${glowColor}, transparent 40%)` }}
+      />
+      <div className="relative z-10 h-full">{children}</div>
+    </div>
+  );
+};
+
+// --- MAIN PAGE ---
+
+export default function Leaderboard() {
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const navigate = useNavigate();
+  
+  const [users, setUsers] = useState<LeaderboardUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overall");
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const usersSnap = await getDocs(collection(db, "users"));
+        const leaderboardData: LeaderboardUser[] = [];
+
+        // Parallel processing of all users for real-time calculation
+        const userStatsPromises = usersSnap.docs.map(async (userDoc) => {
+          const userData = userDoc.data();
+          const uid = userDoc.id;
+
+          // Fetch real data from subcollections
+          const [playlistsSnap, goalsSnap, flashcardsSnap, logsSnap] = await Promise.all([
+            getDocs(collection(db, "users", uid, "playlists")),
+            getDocs(collection(db, "users", uid, "goals")),
+            getDocs(collection(db, "users", uid, "flashcardDecks")),
+            getDocs(collection(db, "users", uid, "study_logs"))
+          ]);
+
+          // Calculate real watched lectures and time
+          let watchedLectures = 0;
+          let totalMinutes = 0;
+          playlistsSnap.forEach(p => {
+            const lectures = p.data().lectures || [];
+            watchedLectures += lectures.filter((l: any) => l.completed).length;
+            totalMinutes += lectures.reduce((acc: number, l: any) => acc + (l.watchTime || 0), 0);
+          });
+
+          // Calculate real completed goals
+          const completedGoals = goalsSnap.docs.filter(g => {
+            const sg = g.data().subGoals || [];
+            return sg.length > 0 && sg.every((s: any) => s.completed);
+          }).length;
+
+          // Total real flashcards
+          let totalFlashcards = 0;
+          flashcardsSnap.forEach(d => totalFlashcards += (d.data().cards || []).length);
+
+          // Real Streak Calculation (No Randomness)
+          const activityDates = new Set(logsSnap.docs.map(doc => {
+            const date = doc.data().createdAt?.toDate();
+            return date ? date.toDateString() : null;
+          }).filter(Boolean));
+
+          let streak = 0;
+          const today = new Date();
+          for (let i = 0; i < 365; i++) {
+            const checkDate = new Date();
+            checkDate.setDate(today.getDate() - i);
+            if (activityDates.has(checkDate.toDateString())) streak++;
+            else if (i > 0) break; 
+          }
+
+          // Scoring logic
+          const score = (watchedLectures * 15) + (Math.floor(totalMinutes / 10) * 2) + 
+                        (completedGoals * 100) + (totalFlashcards * 5) + (streak * 20);
+
+          return {
+            uid,
+            name: userData.name || userData.email?.split("@")[0] || "Scholar",
+            email: userData.email || "",
+            photoURL: userData.photoURL || null,
+            score,
+            watchedLectures,
+            totalMinutes,
+            completedGoals,
+            totalFlashcards,
+            studyStreak: streak
+          };
+        });
+
+        const results = await Promise.all(userStatsPromises);
+        setUsers(results.sort((a, b) => b.score - a.score));
+        setLoading(false);
+      } catch (error) {
+        console.error("Leaderboard Error:", error);
+        setLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
+  }, []);
+
+  const getSortedUsers = () => {
+    switch (activeTab) {
+      case "lectures": return [...users].sort((a, b) => b.watchedLectures - a.watchedLectures);
+      case "time": return [...users].sort((a, b) => b.totalMinutes - a.totalMinutes);
+      case "goals": return [...users].sort((a, b) => b.completedGoals - a.completedGoals);
+      case "streak": return [...users].sort((a, b) => b.studyStreak - a.studyStreak);
+      default: return users;
+    }
+  };
+
+  const sortedList = getSortedUsers();
+  const topThree = sortedList.slice(0, 3);
+  const currentUserRank = sortedList.findIndex(u => u.uid === user?.uid) + 1;
+  const currentUsersData = sortedList.find(u => u.uid === user?.uid);
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-12 w-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-muted-foreground animate-pulse font-medium tracking-widest uppercase text-xs">Synchronizing Ranks</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={cn("container mx-auto px-4 pb-24 animate-in fade-in duration-1000", 
+      theme === "dark" ? "text-white" : "text-zinc-900"
     )}>
-      <header className={cn("sticky top-0 z-50 border-b backdrop-blur-xl transition-all duration-300",
-        theme === "dark" ? "bg-background/80 border-white/5" : "bg-background/60 border-border shadow-sm"
-      )}>
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className={cn("p-2 rounded-xl transition-all duration-300",
-              theme === "dark" ? "bg-primary/20" : "bg-primary/10"
-            )}>
-              <BookOpen className="h-6 w-6 text-primary" />
-            </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">StudySync</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate("/chat")}>
-              <MessageCircle className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="rounded-full"><Bell className="h-5 w-5" /></Button>
-            <ThemeToggle />
-            <Avatar onClick={() => navigate("/profile")} className="cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
-              <AvatarImage src={user?.photoURL || ""} />
-              <AvatarFallback className="bg-primary text-primary-foreground font-bold">{user?.email?.[0]?.toUpperCase()}</AvatarFallback>
-            </Avatar>
+      
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pt-10 mb-16">
+        <div className="flex items-center gap-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} className="rounded-full h-12 w-12 hover:bg-primary/10">
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+          <div className="space-y-1">
+            <h1 className="text-5xl font-black tracking-tighter flex items-center gap-4 italic">
+              <Trophy className="h-12 w-12 text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]" /> Hall of Fame
+            </h1>
+            <p className="text-muted-foreground font-medium tracking-wide uppercase text-xs">The top 1% of global scholars</p>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 space-y-8 animate-in fade-in duration-500">
-        {/* WELCOME SECTION */}
-        <section className={cn("relative overflow-hidden rounded-3xl p-8 backdrop-blur-xl border transition-all duration-300 animate-in slide-in-from-top-4",
-          theme === "dark" 
-            ? "bg-gradient-to-br from-primary/10 via-background/80 to-background border-white/10 shadow-2xl" 
-            : "bg-gradient-to-br from-primary/5 via-background to-background border-border shadow-lg"
-        )}>
-          <div className="relative z-10">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="space-y-2">
-                <h1 className={cn("text-4xl md:text-5xl font-extrabold tracking-tight",
-                  theme === "dark" ? "text-white" : "text-foreground"
-                )}>
-                  Welcome back, <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">{user?.displayName || "Student"}</span>!
-                </h1>
-                <p className="text-muted-foreground text-lg">Ready to crush your goals today? 🚀</p>
-              </div>
-              <Button variant="outline" className="rounded-full" onClick={async () => { await logout(); navigate("/auth"); }}>
-                <LogOut className="h-4 w-4 mr-2" /> Logout
-              </Button>
-            </div>
-          </div>
-          <div className={cn("absolute -top-20 -right-20 w-64 h-64 rounded-full blur-3xl opacity-20 animate-pulse",
-            theme === "dark" ? "bg-primary" : "bg-primary/30"
-          )} />
-        </section>
-
-        {/* ALERTS */}
-        {overdueCount > 0 && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Attention Needed</AlertTitle>
-            <AlertDescription>
-              You have {overdueCount} overdue goal{overdueCount > 1 ? 's' : ''}. Check your <span className="underline cursor-pointer font-bold" onClick={() => navigate('/goals')}>Study Goals</span>.
-            </AlertDescription>
-          </Alert>
+      {/* PODIUM SECTION - BUTTERMAX TIER */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16 items-end">
+        {/* 2nd Place */}
+        {topThree[1] && (
+          <SpotlightCard className="p-10 flex flex-col items-center order-2 md:order-1 h-fit border-slate-400/30" glowColor="rgba(148, 163, 184, 0.15)">
+             <div className="relative mb-6">
+                <Avatar className="h-28 w-28 border-4 border-slate-400 ring-[12px] ring-slate-400/5">
+                   <AvatarImage src={topThree[1].photoURL || ""} />
+                   <AvatarFallback className="text-2xl font-bold">{topThree[1].name[0]}</AvatarFallback>
+                </Avatar>
+                <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-400 text-white border-none px-4 py-1 font-black">#2</Badge>
+             </div>
+             <h3 className="text-2xl font-black truncate w-full text-center">{topThree[1].name}</h3>
+             <p className="text-slate-400 font-mono text-sm mb-6">{topThree[1].score.toLocaleString()} PTS</p>
+             <div className="flex gap-4 w-full border-t border-slate-400/10 pt-6">
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Streak</p><p className="font-black">{topThree[1].studyStreak}d</p></div>
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Videos</p><p className="font-black">{topThree[1].watchedLectures}</p></div>
+             </div>
+          </SpotlightCard>
         )}
 
-        {/* STATS GRID */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <Stat icon={Flame} label="Study Streak" value={`${streak} days`} trend="up" color="from-orange-500 to-red-500" />
-          <Stat icon={Target} label="Goals Completed" value={`${completedGoals}/${totalGoals}`} trend={completedGoals > 0 ? "up" : undefined} color="from-green-500 to-emerald-500" />
-          <Stat icon={Medal} label="Badges Earned" value={`${badgeCount}`} trend="up" color="from-yellow-500 to-amber-500" />
-          <Stat icon={Clock} label="Est. Hours (Week)" value={weeklyHours} trend="up" color="from-blue-500 to-cyan-500" />
-        </section>
+        {/* 1st Place - The Crown Jewel */}
+        {topThree[0] && (
+          <SpotlightCard className="p-12 flex flex-col items-center order-1 md:order-2 ring-4 ring-yellow-500/20 scale-110 z-20 border-yellow-500/50" glowColor="rgba(234, 179, 8, 0.3)">
+             <div className="relative mb-8">
+                <Crown className="h-14 w-14 text-yellow-500 absolute -top-12 left-1/2 -translate-x-1/2 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] animate-bounce" />
+                <Avatar className="h-40 w-40 border-[6px] border-yellow-500 ring-[20px] ring-yellow-500/5 shadow-[0_0_50px_rgba(234,179,8,0.2)]">
+                   <AvatarImage src={topThree[0].photoURL || ""} />
+                   <AvatarFallback className="text-4xl font-bold">{topThree[0].name[0]}</AvatarFallback>
+                </Avatar>
+                <Badge className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black border-none px-6 py-1.5 font-black text-lg italic shadow-xl">CHAMPION</Badge>
+             </div>
+             <h2 className="text-4xl font-black truncate w-full text-center tracking-tighter mb-2">{topThree[0].name}</h2>
+             <p className="text-yellow-500 font-black text-2xl tracking-tighter italic">{topThree[0].score.toLocaleString()} <span className="text-xs uppercase font-bold not-italic text-muted-foreground ml-1">Points</span></p>
+             <div className="flex gap-6 w-full border-t border-yellow-500/10 mt-8 pt-8">
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Level</p><p className="text-xl font-black italic">{Math.floor(topThree[0].score / 500) + 1}</p></div>
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Goals</p><p className="text-xl font-black italic">{topThree[0].completedGoals}</p></div>
+             </div>
+          </SpotlightCard>
+        )}
 
-        {/* CHARTS SECTION */}
-        <section className="grid lg:grid-cols-2 gap-6">
-          {/* Weekly Activity Chart */}
-          <Card className={cn("rounded-3xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl animate-in slide-in-from-left-4",
-            theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border shadow-lg"
-          )}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Weekly Activity
-                </CardTitle>
-                <CardDescription>Your study activity over the last 7 days</CardDescription>
-              </div>
-              <TrendingUp className="h-5 w-5 text-emerald-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-end justify-between h-48 gap-2">
-                  {weeklyData.map((day, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                      <div className="relative w-full flex items-end justify-center h-full">
-                        <div 
-                          className={cn("w-full rounded-t-lg transition-all duration-500 hover:opacity-80 cursor-pointer group-hover:scale-105",
-                            theme === "dark" ? "bg-gradient-to-t from-primary/60 to-primary" : "bg-gradient-to-t from-primary/40 to-primary"
-                          )}
-                          style={{ height: `${(day.value / maxWeeklyValue) * 100}%`, minHeight: day.value > 0 ? '8px' : '0' }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-muted-foreground">{day.day}</span>
-                      <span className="text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">{day.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* 3rd Place */}
+        {topThree[2] && (
+          <SpotlightCard className="p-10 flex flex-col items-center order-3 h-fit border-amber-700/30" glowColor="rgba(180, 83, 9, 0.15)">
+             <div className="relative mb-6">
+                <Avatar className="h-28 w-28 border-4 border-amber-700 ring-[12px] ring-amber-700/5">
+                   <AvatarImage src={topThree[2].photoURL || ""} />
+                   <AvatarFallback className="text-2xl font-bold">{topThree[2].name[0]}</AvatarFallback>
+                </Avatar>
+                <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-amber-700 text-white border-none px-4 py-1 font-black">#3</Badge>
+             </div>
+             <h3 className="text-2xl font-black truncate w-full text-center">{topThree[2].name}</h3>
+             <p className="text-amber-700 font-mono text-sm mb-6">{topThree[2].score.toLocaleString()} PTS</p>
+             <div className="flex gap-4 w-full border-t border-amber-700/10 pt-6">
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Streak</p><p className="font-black">{topThree[2].studyStreak}d</p></div>
+                <div className="flex-1 text-center"><p className="text-[10px] uppercase text-muted-foreground font-bold">Cards</p><p className="font-black">{topThree[2].totalFlashcards}</p></div>
+             </div>
+          </SpotlightCard>
+        )}
+      </div>
 
-          {/* Monthly Progress */}
-          <Card className={cn("rounded-3xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl animate-in slide-in-from-right-4",
-            theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border shadow-lg"
-          )}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Monthly Progress
-              </CardTitle>
-              <CardDescription>Your consistency over the last 30 days</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-bold text-primary">{Math.round(monthlyProgress)}%</span>
-                </div>
-                <div className="relative h-4 rounded-full overflow-hidden bg-muted">
-                  <div 
-                    className={cn("h-full rounded-full transition-all duration-1000 ease-out",
-                      theme === "dark" ? "bg-gradient-to-r from-primary to-accent" : "bg-gradient-to-r from-primary to-accent"
-                    )}
-                    style={{ width: `${monthlyProgress}%` }}
-                  />
-                </div>
-              </div>
-              <div className={cn("p-4 rounded-xl border",
-                theme === "dark" ? "bg-primary/10 border-primary/20" : "bg-primary/5 border-primary/10"
-              )}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Keep it up!</p>
-                    <p className="text-xs text-muted-foreground">You're making great progress</p>
-                  </div>
-                  <Zap className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+      {/* FILTER TABS */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-10">
+        <TabsList className="bg-muted/30 p-1.5 rounded-full h-16 w-full max-w-3xl mx-auto flex shadow-2xl border border-white/5 backdrop-blur-3xl">
+          {[
+            { id: "overall", label: "Global Score", icon: Zap },
+            { id: "lectures", label: "Video Count", icon: BookOpen },
+            { id: "time", label: "Study Hours", icon: Clock },
+            { id: "streak", label: "Day Streaks", icon: Flame }
+          ].map(t => (
+            <TabsTrigger 
+              key={t.id} 
+              value={t.id} 
+              className="flex-1 rounded-full gap-3 data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)] transition-all font-bold text-sm tracking-tight"
+            >
+              <t.icon className="h-5 w-5" />
+              <span className="hidden lg:inline">{t.label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        {/* QUICK ACTIONS */}
-        <section className="animate-in slide-in-from-bottom-4">
-          <h2 className={cn("text-2xl font-bold mb-6 flex items-center gap-2",
-            theme === "dark" ? "text-white" : "text-foreground"
-          )}>
-            Quick Actions
-            <ArrowUpRight className="h-5 w-5 text-primary" />
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {quickActions.map((a, i) => (
-              <div
-                key={a.label}
-                onClick={() => a.href !== "#" && navigate(a.href)}
-                className={cn(
-                  `${a.color} rounded-3xl h-32 md:h-40 p-4 md:p-6 cursor-pointer text-white flex flex-col justify-between shadow-lg hover:scale-[1.05] transition-all duration-300 hover:shadow-2xl group animate-in fade-in`,
-                  `slide-in-from-bottom-${(i % 6) + 1}`
-                )}
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <a.icon className="h-6 w-6 md:h-8 md:w-8 group-hover:scale-110 transition-transform duration-300" />
-                <div>
-                  <p className="font-semibold text-sm md:text-base">{a.label}</p>
-                  <p className="text-[10px] md:text-xs opacity-80 flex items-center gap-1">
-                    {a.href === "#" ? "Coming soon" : "Open"} 
-                    {a.href !== "#" && <ArrowUpRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        <SpotlightCard className="max-w-5xl mx-auto p-0 border-none bg-background/20 rounded-[3rem]" noHover>
+          <div className="divide-y divide-white/5">
+            {sortedList.map((u, index) => {
+              const isMe = u.uid === user?.uid;
+              const valueDisplay = 
+                activeTab === "lectures" ? `${u.watchedLectures} Videos` :
+                activeTab === "time" ? `${Math.floor(u.totalMinutes / 60)}h ${u.totalMinutes % 60}m` :
+                activeTab === "streak" ? `${u.studyStreak} Day Streak` :
+                `${u.score.toLocaleString()} Points`;
 
-        {/* ACTIVITY & GOALS */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card className={cn("rounded-3xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl animate-in slide-in-from-left-4",
-            theme === "dark" ? "bg-background/40 border-white/10 shadow-lg" : "bg-background/60 border-border shadow-lg"
-          )}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-primary" />
-                  Upcoming Tasks
-                </CardTitle>
-                <CardDescription>{goals.length} active goal{goals.length !== 1 ? 's' : ''}</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {goals.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Target className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-sm text-muted-foreground">No goals yet</p>
-                  <Button variant="outline" className="mt-4 rounded-full" onClick={() => navigate("/goals")}>
-                    Create your first goal
-                  </Button>
-                </div>
-              )}
-              {goals.slice(0, 4).map((g, i) => {
-                const total = g.subGoals.length;
-                const done = g.subGoals.filter(s => s.completed).length;
-                const progress = total === 0 ? 0 : Math.round((done / total) * 100);
-                const isOverdue = g.deadline && g.deadline < Date.now() && progress < 100;
-                
-                return (
-                  <div key={g.id} className={cn("space-y-2 p-3 rounded-xl border transition-all duration-300 hover:scale-[1.02]",
-                    theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border",
-                    `animate-in fade-in slide-in-from-left-${i + 1}`
-                  )} style={{ animationDelay: `${i * 100}ms` }}>
-                    <div className="flex justify-between text-sm">
-                      <span className={cn("font-medium", isOverdue ? "text-destructive" : "text-foreground")}>
-                        {g.title} {isOverdue && <span className="text-xs">(Overdue)</span>}
-                      </span>
-                      <span className="font-bold text-primary">{progress}%</span>
-                    </div>
-                    <Progress value={progress} className={cn("h-2", isOverdue ? "bg-destructive/20" : "")} />
-                  </div>
-                );
-              })}
-              {goals.length > 4 && (
-                <Button variant="outline" className="w-full rounded-full" onClick={() => navigate("/goals")}>
-                  View all {goals.length} goals
-                  <ArrowUpRight className="h-4 w-4 ml-2" />
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className={cn("rounded-3xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl animate-in slide-in-from-right-4",
-            theme === "dark" ? "bg-background/40 border-white/10 shadow-lg" : "bg-background/60 border-border shadow-lg"
-          )}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Play className="h-5 w-5 text-primary" />
-                  Recent Activity
-                </CardTitle>
-                <CardDescription>Your latest study sessions</CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {recentActivity.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Play className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                  <p className="text-sm text-muted-foreground">No recent activity</p>
-                  <Button variant="outline" className="mt-4 rounded-full" onClick={() => navigate("/playlists")}>
-                    Start studying
-                  </Button>
-                </div>
-              )}
-              {recentActivity.map((v, i) => (
-                <div
-                  key={v.id}
-                  onClick={() => navigate(`/playlists?video=${v.videoId}`)}
-                  className={cn("flex items-center gap-3 cursor-pointer p-3 rounded-xl border transition-all duration-300 hover:scale-[1.02] group",
-                    theme === "dark" ? "bg-white/5 border-white/10 hover:bg-white/10" : "bg-muted/30 border-border hover:bg-muted/50",
-                    `animate-in fade-in slide-in-from-right-${i + 1}`
-                  )}
-                  style={{ animationDelay: `${i * 100}ms` }}
-                >
-                  <div className={cn("p-2 rounded-full transition-all duration-300 group-hover:scale-110",
-                    theme === "dark" ? "bg-primary/20" : "bg-primary/10"
-                  )}>
-                    <Play className="h-4 w-4 text-primary" />
-                  </div>
+              return (
+                <div key={u.uid} className={cn("flex items-center gap-6 p-6 md:px-10 transition-all hover:bg-white/5 group", isMe && "bg-primary/10")}>
+                  <div className="w-14 text-center font-black text-3xl italic text-muted-foreground/20 group-hover:text-primary transition-colors">{index + 1}</div>
+                  <Avatar className="h-14 w-14 border-2 border-white/10 ring-4 ring-black/10">
+                    <AvatarImage src={u.photoURL || ""} />
+                    <AvatarFallback className="font-black">{u.name[0]}</AvatarFallback>
+                  </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground">{v.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {v.watchTime ? `Watched ${v.watchTime} min` : "Opened"} • {v.completed ? "Completed" : "In Progress"}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <p className="font-black text-xl truncate tracking-tight">{u.name}</p>
+                      {isMe && <Badge className="bg-primary text-white font-black italic scale-90">YOU</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium truncate uppercase tracking-widest">{u.email}</p>
                   </div>
-                  <ArrowUpRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="text-right">
+                    <p className="font-black text-2xl text-primary tracking-tighter italic">{valueDisplay}</p>
+                    <div className="flex items-center justify-end gap-2 opacity-30 group-hover:opacity-100 transition-opacity">
+                       <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                       <span className="text-[10px] font-black uppercase tracking-tighter">LVL {Math.floor(u.score / 500) + 1}</span>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    </div>
-  );
-}
+              );
+            })}
+          </div>
+        </SpotlightCard>
+      </Tabs>
 
-function Stat({ icon: Icon, label, value, trend, color = "from-primary to-accent" }: { 
-  icon: any; 
-  label: string; 
-  value: string; 
-  trend?: "up" | "down";
-  color?: string;
-}) {
-  const { theme } = useTheme();
-  
-  return (
-    <Card className={cn("rounded-3xl border backdrop-blur-xl transition-all duration-300 hover:shadow-xl hover:scale-[1.02] group overflow-hidden",
-      theme === "dark" ? "bg-background/40 border-white/10 shadow-lg" : "bg-background/60 border-border shadow-lg"
-    )}>
-      <CardContent className="p-6 flex items-center gap-4 relative">
-        <div className={cn(`p-4 rounded-2xl bg-gradient-to-br ${color} shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`)}>
-          <Icon className="h-6 w-6 text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground truncate mb-1">{label}</p>
-          <div className="flex items-center gap-2">
-            <p className={cn("text-2xl font-bold truncate", theme === "dark" ? "text-white" : "text-foreground")}>{value}</p>
-            {trend === "up" && (
-              <TrendingUp className="h-4 w-4 text-emerald-500 animate-in fade-in" />
-            )}
+      {/* FIXED BUTTERMAX STATUS BAR */}
+      {currentUsersData && currentUserRank > 3 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-6 animate-in slide-in-from-bottom-12 duration-1000">
+          <div className="bg-primary p-5 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.4)] flex items-center justify-between text-white ring-1 ring-white/20 backdrop-blur-xl">
+            <div className="flex items-center gap-5">
+              <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center font-black text-xl italic shadow-inner ring-1 ring-white/30">#{currentUserRank}</div>
+              <div>
+                <p className="text-[10px] uppercase font-black tracking-[0.2em] text-white/60">Current Standing</p>
+                <p className="font-black text-2xl leading-none italic tracking-tighter">{currentUsersData.score.toLocaleString()} Total Points</p>
+              </div>
+            </div>
+            <Button variant="secondary" size="icon" className="rounded-2xl h-12 w-12 bg-white text-primary hover:bg-white/90 shadow-xl scale-110" onClick={() => navigate('/profile')}>
+              <TrendingUp className="h-6 w-6" />
+            </Button>
           </div>
         </div>
-        <div className={cn(`absolute -bottom-10 -right-10 w-32 h-32 rounded-full blur-3xl opacity-10 bg-gradient-to-br ${color} transition-opacity group-hover:opacity-20`)} />
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
