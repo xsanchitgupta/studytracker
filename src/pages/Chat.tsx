@@ -401,7 +401,7 @@ export default function Chat() {
       isMounted = false;
       unsub();
     };
-  }, [activeChat.id]);
+  }, [activeChat?.id]);
 
   // Load pinned chats from localStorage
   useEffect(() => {
@@ -462,7 +462,7 @@ export default function Chat() {
       isMounted = false;
       typingUnsub();
     };
-  }, [activeChat.id, user?.uid, users]);
+  }, [activeChat?.id, user?.uid, users]);
 
   // --- Actions ---
 
