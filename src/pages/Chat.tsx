@@ -349,7 +349,7 @@ export default function Chat() {
       isMounted = false;
       unsub();
     };
-  }, [activeChat.id]);
+  }, [activeChat?.id]);
 
   // Merge optimistic messages with real messages
   const displayMessages = useMemo(() => {
@@ -1098,19 +1098,19 @@ export default function Chat() {
           <div className="flex items-center gap-4 flex-1 min-w-0">
              <Button variant="ghost" size="icon" className="md:hidden -ml-2 hover:bg-white/5" onClick={() => setMobileMenuOpen(true)}><Menu className="h-5 w-5" /></Button>
              <div className="flex items-center gap-3 min-w-0">
-                {activeChat.type === 'channel' ? 
+                {activeChat?.type === 'channel' ? 
                   <div className="p-2 bg-primary/20 rounded-xl shadow-glow-primary shrink-0"><Hash className="h-5 w-5 text-primary" /></div> : 
                   <Avatar className={cn("h-10 w-10 border shadow-lg shrink-0", theme === "dark" ? "border-white/10" : "border-border")}>
-                    <AvatarImage src={activeChat.avatar} />
-                    <AvatarFallback className={cn("font-bold text-white", activeChat.otherUserId ? getAvatarColor(activeChat.otherUserId) : "bg-gray-500")}>{(activeChat.name || "?")[0]}</AvatarFallback>
+                    <AvatarImage src={activeChat?.avatar} />
+                    <AvatarFallback className={cn("font-bold text-white", activeChat?.otherUserId ? getAvatarColor(activeChat.otherUserId) : "bg-gray-500")}>{(activeChat?.name || "?")[0]}</AvatarFallback>
                   </Avatar>
                 }
                 <div className="min-w-0">
-                   <h1 className={cn("font-bold text-lg leading-tight tracking-tight truncate", theme === "dark" ? "text-white" : "text-foreground")}>{activeChat.name}</h1>
-                   {activeChat.type === 'channel' && <p className="text-xs text-muted-foreground font-medium hidden md:block truncate">{activeChat.description}</p>}
-                   {activeChat.type === 'dm' && (
+                   <h1 className={cn("font-bold text-lg leading-tight tracking-tight truncate", theme === "dark" ? "text-white" : "text-foreground")}>{activeChat?.name}</h1>
+                   {activeChat?.type === 'channel' && <p className="text-xs text-muted-foreground font-medium hidden md:block truncate">{activeChat?.description}</p>}
+                   {activeChat?.type === 'dm' && (
                      <p className="text-xs text-muted-foreground font-medium hidden md:block">
-                       {users.find(u => u.uid === activeChat.otherUserId)?.status === 'online' ? 'Online' : 'Offline'}
+                       {users.find(u => u.uid === activeChat?.otherUserId)?.status === 'online' ? 'Online' : 'Offline'}
                      </p>
                    )}
                 </div>
