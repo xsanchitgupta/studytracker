@@ -5,25 +5,15 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import {
-  BookOpen,
-  Target,
-  Trophy,
-  Play,
-  TrendingUp,
-  ArrowRight,
-  Zap,
-  Cpu,
-  CheckCircle2,
-  Menu,
-  X,
-  ChevronRight,
-  GraduationCap
+  BookOpen, Target, Trophy, Play, TrendingUp, ArrowRight, Zap,
+  Cpu, CheckCircle2, Menu, X, ChevronRight, Sparkles, ShieldCheck,
+  Activity, Layers, Brain, Clock, Award, GraduationCap, Medal,
+  MessageSquare, LayoutDashboard, BarChart3, ListVideo
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-// --- COMPONENTS ---
+// --- REUSABLE PERFORMANCE COMPONENTS ---
 
-// 1. ADAPTIVE SPOTLIGHT CARD
-// Detects touch devices to show a static glow instead of mouse-following
 const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
   const divRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -42,50 +32,54 @@ const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode
       onMouseEnter={() => setOpacity(1)}
       onMouseLeave={() => setOpacity(0)}
       className={cn(
-        "relative overflow-hidden rounded-3xl border bg-background/50 backdrop-blur-md transition-all duration-300",
+        "relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border border-border/50 bg-background/50 backdrop-blur-md transition-all duration-500 hover:border-primary/40 hover:shadow-[0_0_50px_-12px_rgba(var(--primary-rgb),0.2)]",
         className
       )}
     >
-      {/* Mouse Spotlight (Desktop) */}
       <div
-        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-300 hidden md:block"
+        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 hidden md:block"
         style={{
           opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, rgba(120, 119, 198, 0.15), transparent 40%)`,
+          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, rgba(var(--primary-rgb), 0.1), transparent 40%)`,
         }}
       />
-      
-      {/* Static Glow (Mobile) - subtle permanent highlight */}
-      <div 
-        className="absolute inset-0 md:hidden pointer-events-none"
-        style={{
-            background: `radial-gradient(circle at 50% 0%, rgba(120, 119, 198, 0.1), transparent 70%)`
-        }}
-      />
-      
-      <div className="relative h-full">{children}</div>
+      <div className="absolute inset-0 md:hidden pointer-events-none bg-gradient-to-b from-primary/5 to-transparent" />
+      <div className="relative h-full z-10">{children}</div>
     </div>
   );
 };
 
-// 2. MOBILE-OPTIMIZED MARQUEE
-const Marquee = ({ items }: { items: string[] }) => {
+const TiltCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [rotate, setRotate] = useState({ x: 0, y: 0 });
+
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.innerWidth < 768) return; // Disable tilt on mobile for performance
+    if (!cardRef.current) return;
+    const card = cardRef.current.getBoundingClientRect();
+    const x = (e.clientX - card.left - card.width / 2) / (card.width / 2) * 8;
+    const y = (e.clientY - card.top - card.height / 2) / (card.height / 2) * -8;
+    setRotate({ x: y, y: x });
+  };
+
   return (
-    <div className="relative flex w-full overflow-hidden border-y border-border/40 bg-background/50 py-6 md:py-10 backdrop-blur-sm">
-      <div className="absolute inset-y-0 left-0 w-12 md:w-20 bg-gradient-to-r from-background to-transparent z-10" />
-      <div className="absolute inset-y-0 right-0 w-12 md:w-20 bg-gradient-to-l from-background to-transparent z-10" />
-      <div className="flex animate-marquee whitespace-nowrap">
-        {items.concat(items).map((item, i) => (
-          <div key={i} className="mx-4 md:mx-8 flex items-center gap-2 text-sm md:text-xl font-bold text-muted-foreground/50 grayscale transition-all hover:scale-110 hover:grayscale-0 hover:text-foreground">
-             <GraduationCap className="h-4 w-4 md:h-6 md:w-6" /> {item}
-          </div>
-        ))}
-      </div>
+    <div
+      ref={cardRef}
+      onMouseMove={onMouseMove}
+      onMouseLeave={() => setRotate({ x: 0, y: 0 })}
+      style={{
+        transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(1.01, 1.01, 1.01)`,
+        willChange: "transform",
+      }}
+      className={cn("relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border border-white/10 bg-background/40 backdrop-blur-3xl shadow-2xl transition-transform duration-200 ease-out group", className)}
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="relative z-10 h-full">{children}</div>
     </div>
   );
 };
 
-// --- MAIN PAGE ---
+// --- MAIN LANDING PAGE ---
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -93,336 +87,219 @@ const Landing = () => {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Lock body scroll when menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-  }, [mobileMenuOpen]);
+  useEffect(() => { setMounted(true); }, []);
 
   if (!mounted) return null;
 
   return (
-    <div className={cn("min-h-screen selection:bg-primary/30 font-sans overflow-x-hidden",
-      theme === "dark" ? "bg-black text-white" : "bg-white text-zinc-950"
+    <div className={cn("min-h-screen selection:bg-primary/30 font-sans overflow-x-hidden antialiased",
+      theme === "dark" ? "bg-[#030303] text-white" : "bg-zinc-50 text-zinc-950"
     )}>
 
-      {/* BACKGROUND GRID */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:14px_14px] md:bg-[size:24px_24px]">
-        <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[200px] w-[200px] md:h-[310px] md:w-[310px] rounded-full bg-primary/20 opacity-20 blur-[80px]" />
+      {/* OPTIMIZED LAYERED BACKGROUND */}
+      <div className="fixed inset-0 -z-10 h-full w-full pointer-events-none overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] h-[100vw] w-[100vw] rounded-full bg-primary/5 blur-[120px] opacity-50" />
+        <div className="absolute bottom-[-10%] right-[-10%] h-[80vw] w-[80vw] rounded-full bg-purple-600/5 blur-[100px] opacity-50" />
+        <div className="h-full w-full opacity-[0.03] dark:opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
       </div>
 
-      {/* NAVBAR */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-2 px-2 md:pt-4 md:px-4">
+      {/* ADAPTIVE NAVBAR */}
+      <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6 md:px-6">
         <nav className={cn(
-          "flex items-center justify-between gap-4 rounded-full border px-4 py-2.5 md:px-6 md:py-3 shadow-lg backdrop-blur-xl transition-all duration-300 w-full max-w-5xl",
-          theme === "dark" ? "bg-zinc-900/80 border-white/10" : "bg-white/80 border-zinc-200"
+          "flex items-center justify-between gap-4 rounded-full border px-4 py-2.5 md:px-8 md:py-4 shadow-2xl backdrop-blur-2xl transition-all duration-500 w-full max-w-6xl",
+          theme === "dark" ? "bg-black/60 border-white/10" : "bg-white/60 border-zinc-200"
         )}>
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
-            <div className="bg-primary/20 p-1.5 rounded-lg text-primary">
-              <BookOpen className="h-4 w-4" />
+          <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate("/")}>
+            <div className="bg-primary p-2 rounded-xl text-primary-foreground shadow-[0_0_20px_rgba(var(--primary-rgb),0.4)] transition-transform group-hover:scale-105 active:scale-95">
+              <Zap className="h-4 w-4 md:h-5 md:w-5 fill-current" />
             </div>
-            <span className="font-bold tracking-tight text-lg">StudySync</span>
+            <span className="font-black tracking-tighter text-lg md:text-xl uppercase italic leading-none">StudySync</span>
           </div>
           
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <a href="#features" className="hover:text-primary transition-colors">Features</a>
-            <a href="#leaderboard" className="hover:text-primary transition-colors">Leaderboard</a>
-            <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
+          <div className="hidden lg:flex items-center gap-10 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/60">
+            {['dashboard', 'performance', 'leaderboard'].map((id) => (
+              <a key={id} href={`#${id}`} className="hover:text-primary transition-all hover:tracking-[0.4em]">{id}</a>
+            ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-4">
             <ThemeToggle />
-            <Button size="sm" onClick={() => navigate("/auth")} className="rounded-full px-5 shadow-lg shadow-primary/20">
-              Get Started
+            <Button onClick={() => navigate("/auth")} className="rounded-full px-5 md:px-8 h-10 md:h-12 font-black uppercase tracking-widest bg-primary hover:bg-primary/90 text-white shadow-lg text-[10px] md:text-xs">
+              Initialize
             </Button>
-          </div>
-
-          {/* Mobile Toggles */}
-          <div className="flex md:hidden items-center gap-2">
-             <ThemeToggle />
-             <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="rounded-full">
-                <Menu className="h-5 w-5" />
-             </Button>
+            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="lg:hidden rounded-full h-10 w-10">
+               <Menu className="h-5 w-5" />
+            </Button>
           </div>
         </nav>
       </div>
 
-      {/* MOBILE FULLSCREEN MENU */}
+      {/* MOBILE MENU (Fullscreen Overlay) */}
       <div className={cn(
-        "fixed inset-0 z-[60] bg-background/95 backdrop-blur-2xl transition-all duration-300 flex flex-col p-6",
-        mobileMenuOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-full pointer-events-none"
+        "fixed inset-0 z-[60] bg-background/98 backdrop-blur-3xl transition-all duration-500 lg:hidden flex flex-col p-8",
+        mobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       )}>
-         <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-2">
-               <div className="bg-primary/20 p-1.5 rounded-lg text-primary">
-                  <BookOpen className="h-5 w-5" />
-               </div>
-               <span className="font-bold text-xl">StudySync</span>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)} className="rounded-full">
-               <X className="h-6 w-6" />
-            </Button>
-         </div>
-
-         <div className="flex flex-col gap-6 text-2xl font-medium">
-            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between py-2 border-b border-border/10">
-               Features <ChevronRight className="h-5 w-5 opacity-30" />
-            </a>
-            <a href="#leaderboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between py-2 border-b border-border/10">
-               Leaderboard <ChevronRight className="h-5 w-5 opacity-30" />
-            </a>
-            <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-between py-2 border-b border-border/10">
-               Pricing <ChevronRight className="h-5 w-5 opacity-30" />
-            </a>
-         </div>
-
-         <div className="mt-auto space-y-4">
-            <Button size="lg" className="w-full rounded-full h-12 text-lg" onClick={() => { setMobileMenuOpen(false); navigate("/auth"); }}>
-               Get Started Now
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">v2.0 • Mobile Optimized</p>
-         </div>
+        <div className="flex justify-between items-center mb-16">
+          <span className="font-black tracking-tighter text-2xl uppercase italic text-primary">StudySync</span>
+          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)} className="rounded-full border"><X /></Button>
+        </div>
+        <div className="flex flex-col gap-8 text-4xl font-black uppercase italic tracking-tighter">
+          {['dashboard', 'performance', 'leaderboard'].map((id) => (
+            <a key={id} href={`#${id}`} onClick={() => setMobileMenuOpen(false)} className="border-b border-border/10 pb-4">{id}</a>
+          ))}
+        </div>
+        <Button size="lg" className="mt-auto w-full rounded-2xl h-20 text-xl font-black uppercase tracking-widest italic" onClick={() => navigate('/auth')}>Start Protocol</Button>
       </div>
 
-      {/* HERO SECTION */}
-      <main className="container mx-auto px-4 pt-28 pb-12 md:pt-32 md:pb-20 text-center">
-        
-        {/* Badge */}
-        <div className="mb-6 md:mb-8 flex justify-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-           <div className={cn(
-             "group flex items-center gap-2 rounded-full border px-3 py-1 md:px-4 md:py-1.5 text-[10px] md:text-xs font-medium transition-all hover:bg-muted/80 cursor-pointer",
-             theme === "dark" ? "bg-zinc-900/80 border-white/10" : "bg-white border-zinc-200"
-           )}>
-            <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
-            <span className="text-muted-foreground group-hover:text-foreground transition-colors">v2.0: AI Flashcards & Chat</span>
-            <ChevronRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-           </div>
-        </div>
-
-        {/* Headline */}
-        <h1 className="mx-auto max-w-4xl text-4xl font-bold tracking-tight md:text-7xl lg:text-8xl animate-in fade-in slide-in-from-bottom-8 duration-1000 leading-[1.1]">
-          The OS for <br />
-          <span className="relative whitespace-nowrap text-primary">
-            <span className="relative z-10 bg-gradient-to-r from-primary via-purple-500 to-pink-500 bg-clip-text text-transparent">High Achievers.</span>
-            <span className="absolute -bottom-1 md:-bottom-2 left-0 -z-10 h-[20%] w-full -rotate-1 bg-primary/20 blur-xl" />
-          </span>
+      {/* HERO SECTION (Fluid Typography) */}
+      <main className="container mx-auto px-6 pt-40 pb-20 md:pt-64 md:pb-32 text-center relative">
+        <h1 className="mx-auto max-w-[1400px] text-[clamp(2.5rem,12vw,12rem)] font-black tracking-tighter leading-[0.85] uppercase italic transition-all">
+          Elevate <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-primary via-primary to-purple-800 drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.2)]">Learning.</span>
         </h1>
-
-        {/* Subheadline */}
-        <p className="mx-auto mt-6 md:mt-8 max-w-2xl text-base md:text-xl text-muted-foreground leading-relaxed animate-in fade-in slide-in-from-bottom-12 duration-1000 px-4">
-          Stop struggling with scattered notes. 
-          StudySync organizes your lectures, tracks your goals, and ranks your progress globally.
+        <p className="mx-auto mt-8 md:mt-16 max-w-3xl text-[clamp(1rem,2.5vw,1.5rem)] text-muted-foreground font-medium leading-relaxed px-4">
+          The high-performance OS for modern scholars. Organize lectures, track cognitive milestones, and dominate global rankings with real-time biometric analytics.
         </p>
 
-        {/* CTA Buttons */}
-        <div className="mt-8 md:mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row animate-in fade-in slide-in-from-bottom-16 duration-1000 px-4">
-          <Button 
-            size="lg" 
-            onClick={() => navigate("/auth")} 
-            className="h-12 w-full sm:w-auto rounded-full px-8 text-base font-semibold shadow-xl shadow-primary/25 transition-all active:scale-95"
-          >
-            Start Studying Now
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            size="lg" 
-            className="h-12 w-full sm:w-auto rounded-full border-2 bg-transparent px-8 text-base active:scale-95"
-          >
-            <Play className="mr-2 h-4 w-4" />
-            Watch Demo
+        <div className="mt-10 md:mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row px-4">
+          <Button size="lg" onClick={() => navigate("/auth")} className="h-16 md:h-20 w-full sm:w-[400px] rounded-2xl px-12 text-lg md:text-xl font-black uppercase tracking-[0.4em] italic shadow-[0_20px_50px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] transition-all text-white">
+            Enter Dashboard
           </Button>
         </div>
 
-        {/* Hero Image / Dashboard Preview */}
-        <div className="mt-12 md:mt-20 relative mx-auto max-w-5xl animate-in fade-in zoom-in duration-1000 delay-300 px-2 md:px-0">
-            <div className={cn(
-              "relative rounded-xl md:rounded-2xl border p-1 md:p-2 shadow-2xl overflow-hidden",
-              theme === "dark" ? "bg-zinc-900/50 border-white/10" : "bg-white/50 border-zinc-200"
-            )}>
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent z-20" />
-              
-              <div className="aspect-video rounded-lg md:rounded-xl bg-zinc-950 border border-white/5 relative flex flex-col">
-                  {/* Fake Browser Top */}
-                  <div className="h-8 md:h-12 border-b border-white/5 bg-white/5 flex items-center px-3 md:px-4 gap-2">
-                    <div className="flex gap-1.5">
-                      <div className="w-2 h-2 md:w-3 md:h-3 rounded-full bg-red-500/50" />
-                      <div className="w-2 h-2 md:w-3 md:h-3 rounded-full bg-yellow-500/50" />
-                      <div className="w-2 h-2 md:w-3 md:h-3 rounded-full bg-green-500/50" />
+        {/* HERO PREVIEW (Responsive aspect ratio) */}
+        <div className="mt-24 md:mt-40 relative mx-auto max-w-6xl animate-in zoom-in duration-1000 delay-300 px-2 md:px-0">
+            <div className="absolute -inset-4 md:-inset-10 bg-primary/10 rounded-[3rem] md:rounded-[5rem] blur-[80px] md:blur-[120px] opacity-30 pointer-events-none" />
+            <TiltCard className="border-white/5 p-2 md:p-3 shadow-2xl">
+                <div className="aspect-[16/10] md:aspect-[21/9] rounded-[1.5rem] md:rounded-[2rem] bg-[#050505] relative flex items-center justify-center overflow-hidden border border-white/5">
+                    <div className="flex flex-col items-center gap-6 md:gap-10 z-10">
+                        <Activity className="h-12 w-12 md:h-20 md:w-20 text-primary animate-pulse" />
+                        <div className="space-y-4 flex flex-col items-center">
+                          <div className="h-1 md:h-2 w-48 md:w-80 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                             <div className="h-full bg-primary w-[82%] animate-slide-right shadow-[0_0_15px_rgba(var(--primary-rgb),1)]" />
+                          </div>
+                          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.5em] text-primary/80">Neural Link Synced</p>
+                        </div>
                     </div>
-                    <div className="mx-auto w-1/3 h-4 md:h-6 bg-white/5 rounded-full" />
-                  </div>
-                  
-                  {/* Fake Content */}
-                  <div className="flex-1 p-3 md:p-8 flex gap-4 md:gap-8">
-                     <div className="w-32 md:w-48 h-full hidden md:flex flex-col gap-3 opacity-50">
-                        <div className="h-8 bg-white/10 rounded-lg w-full" />
-                        <div className="h-8 bg-white/5 rounded-lg w-full" />
-                        <div className="h-8 bg-white/5 rounded-lg w-full" />
-                     </div>
-                     
-                     <div className="flex-1 space-y-2 md:space-y-4">
-                        <div className="flex gap-2 md:gap-4">
-                           <div className="h-20 md:h-32 flex-1 bg-gradient-to-br from-primary/20 to-purple-500/10 rounded-lg md:rounded-2xl border border-primary/20 p-2 md:p-4 relative overflow-hidden">
-                              <div className="absolute top-2 left-2 md:top-4 md:left-4 w-6 h-6 md:w-8 md:h-8 rounded-full bg-primary/20" />
-                           </div>
-                           <div className="h-20 md:h-32 flex-1 bg-white/5 rounded-lg md:rounded-2xl border border-white/5 hidden sm:block" />
-                        </div>
-                        <div className="h-32 md:h-64 bg-white/5 rounded-lg md:rounded-2xl border border-white/5 w-full flex items-center justify-center">
-                            <div className="text-center px-2">
-                                <TrendingUp className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground/20 mx-auto mb-2" />
-                                <p className="text-muted-foreground/30 font-mono text-xs md:text-sm">Real-time Performance Metrics</p>
-                            </div>
-                        </div>
-                     </div>
-                  </div>
-              </div>
-            </div>
+                </div>
+            </TiltCard>
         </div>
       </main>
 
-      {/* MARQUEE */}
-      <Marquee items={["Engineering", "Medical", "Arts", "Law", "CS", "Business", "Psychology"]} />
-
-      {/* FEATURES - MOBILE OPTIMIZED LAYOUT */}
-      <section id="features" className="container mx-auto px-4 py-16 md:py-32">
-        <div className="mb-12 md:mb-20 text-center">
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">
-            Built for students. <br />
-            <span className="text-muted-foreground">Powered by data.</span>
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-          {/* Feature 1: Playlists - Reduced height on mobile */}
-          <SpotlightCard className="md:col-span-2 row-span-1 md:row-span-2 min-h-[350px] md:min-h-[400px] group">
-             <div className="p-6 md:p-10 h-full flex flex-col justify-between relative z-10">
-                <div>
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4 md:mb-6 text-primary">
-                    <Play className="h-5 w-5 md:h-6 md:w-6" />
-                  </div>
-                  <h3 className="text-2xl md:text-3xl font-bold mb-2 md:mb-4">Focus-First Playlists</h3>
-                  <p className="text-muted-foreground text-base md:text-lg max-w-md">
-                    Import YouTube lectures into a distraction-free zone. 
-                    Take timestamped notes and track your watch time.
-                  </p>
-                </div>
-                
-                {/* Visual */}
-                <div className="mt-6 md:mt-8 relative h-32 md:h-40 w-full bg-background/40 rounded-xl border border-border/50 overflow-hidden flex flex-col p-3 md:p-4 gap-2 shadow-inner">
-                   {[1, 2].map((i) => (
-                     <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-background/80 border border-border/20">
-                        <div className="h-6 w-10 md:h-8 md:w-12 bg-muted rounded flex items-center justify-center">
-                          <Play className="h-2 w-2 md:h-3 md:w-3 opacity-50" />
-                        </div>
-                        <div className="flex-1 space-y-1">
-                           <div className="h-1.5 md:h-2 w-3/4 bg-muted-foreground/20 rounded" />
-                        </div>
-                        {i === 1 && <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-green-500" />}
-                     </div>
-                   ))}
-                </div>
-             </div>
-          </SpotlightCard>
-
-          {/* Feature 2: Goals */}
-          <SpotlightCard className="min-h-[250px] md:min-h-[300px]">
-             <div className="p-6 md:p-8 h-full flex flex-col">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 text-purple-500">
-                  <Target className="h-4 w-4 md:h-5 md:w-5" />
-                </div>
-                <h3 className="text-lg md:text-xl font-bold mb-2">Smart Goals</h3>
-                <p className="text-muted-foreground text-sm flex-1">
-                  Break down massive exams into daily sub-goals.
+      {/* BENTO GRID (Mobile stacking logic) */}
+      <section id="dashboard" className="container mx-auto px-4 py-20 md:py-32">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-6">
+          
+          <TiltCard className="md:col-span-4 p-8 md:p-12 min-h-[400px] md:min-h-[500px] flex flex-col justify-between">
+              <div>
+                <Badge className="bg-primary/20 text-primary mb-4 md:mb-6 font-black uppercase tracking-widest text-[9px] md:text-[10px]">Command Center</Badge>
+                <h3 className="text-4xl md:text-6xl font-black tracking-tighter mb-4 md:mb-6 italic uppercase leading-none">The Unified <br /> Dashboard</h3>
+                <p className="text-muted-foreground text-base md:text-xl leading-relaxed max-w-lg">
+                  A high-density overview of your academic life. Monitor active streaks, upcoming goals, and lecture progress in one unified frame.
                 </p>
-                <div className="mt-4 flex items-center gap-2 text-xs text-foreground font-medium bg-background/50 p-2 rounded-lg border border-border/30">
-                   <div className="w-3 h-3 rounded border border-primary" />
-                   <span>Physics Report Due</span>
-                </div>
-             </div>
+              </div>
+              <LayoutDashboard className="h-10 w-10 md:h-14 md:w-14 text-primary/20" />
+          </TiltCard>
+
+          <SpotlightCard className="md:col-span-2 p-8 md:p-12 min-h-[400px] md:min-h-[500px] bg-gradient-to-br from-blue-500/5 to-transparent">
+              <Badge className="bg-blue-500/20 text-blue-400 mb-6 font-black uppercase tracking-widest text-[10px]">Neural Intelligence</Badge>
+              <h3 className="text-4xl md:text-5xl font-black tracking-tighter mb-6 italic uppercase leading-none">Smart <br /> Chat</h3>
+              <p className="text-muted-foreground text-sm md:text-lg mb-8">
+                Summarize lectures, clarify concepts, and generate flashcards from your existing notes using our integrated AI engine.
+              </p>
+              <MessageSquare className="h-16 w-16 text-blue-500/10" />
           </SpotlightCard>
 
-          {/* Feature 3: Performance */}
-          <SpotlightCard className="min-h-[250px] md:min-h-[300px]">
-             <div className="p-6 md:p-8 h-full flex flex-col">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-pink-500/10 flex items-center justify-center mb-4 text-pink-500">
-                  <Cpu className="h-4 w-4 md:h-5 md:w-5" />
-                </div>
-                <h3 className="text-lg md:text-xl font-bold mb-2">Analytics</h3>
-                <p className="text-muted-foreground text-sm">
-                  Maintain your streak and watch your study hours graph go up.
+          <TiltCard id="performance" className="md:col-span-3 p-8 md:p-12 min-h-[500px] border-emerald-500/10 bg-emerald-500/[0.02]">
+              <Badge className="bg-emerald-500/20 text-emerald-400 mb-6 font-black uppercase tracking-widest text-[10px]">Cognitive Metrics</Badge>
+              <h3 className="text-4xl md:text-6xl font-black tracking-tighter mb-6 italic uppercase leading-none text-emerald-500">Study <br /> Velocity</h3>
+              <p className="text-muted-foreground text-sm md:text-xl mb-10 leading-relaxed">
+                Monitor session intensity and retention mastery through live subject distribution heatmaps.
+              </p>
+              <div className="flex items-end gap-1.5 h-24 md:h-32">
+                  {[40, 70, 45, 90, 65, 80, 100].map((h, i) => (
+                    <div key={i} className="flex-1 bg-emerald-500/20 rounded-t-md md:rounded-t-lg transition-all hover:bg-emerald-500" style={{ height: `${h}%` }} />
+                  ))}
+              </div>
+          </TiltCard>
+
+          <SpotlightCard className="md:col-span-3 p-8 md:p-12 min-h-[500px] bg-gradient-to-br from-purple-500/5 to-transparent">
+              <Badge className="bg-purple-500/20 text-purple-400 mb-6 font-black uppercase tracking-widest text-[10px]">Milestone Protocol</Badge>
+              <h3 className="text-4xl md:text-6xl font-black tracking-tighter mb-6 italic uppercase leading-none">Smart <br /> Goals</h3>
+              <p className="text-muted-foreground text-sm md:text-xl mb-10">
+                Automated sub-goal decomposition for complex exams. Track completion history with visual milestones.
+              </p>
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-black/40 border border-white/5">
+                <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
+                <span className="text-xs font-black uppercase tracking-widest opacity-40 italic text-purple-400">Processing Sub-Goals...</span>
+              </div>
+          </SpotlightCard>
+
+          <TiltCard className="md:col-span-6 p-8 md:p-12 min-h-[400px] flex flex-col md:flex-row items-center gap-8 md:gap-12">
+              <div className="flex-1 text-center md:text-left">
+                <Badge className="bg-orange-500/20 text-orange-400 mb-6 font-black uppercase tracking-widest text-[10px]">Immersion Control</Badge>
+                <h3 className="text-4xl md:text-6xl font-black tracking-tighter mb-6 italic uppercase leading-none">Focus <br /> Playlists</h3>
+                <p className="text-muted-foreground text-sm md:text-xl leading-relaxed">
+                  Specialized lecture environments with integrated timestamped notes and automatic session logging.
                 </p>
-                <div className="mt-4 flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                   <Zap className="h-4 w-4 text-yellow-500" />
-                   <span>12 Day Streak</span>
-                </div>
-             </div>
-          </SpotlightCard>
+              </div>
+              <ListVideo className="h-24 w-24 md:h-40 md:w-40 text-orange-500/10" />
+          </TiltCard>
 
-          {/* Feature 4: Leaderboard */}
-          <SpotlightCard className="md:col-span-3 min-h-[200px] md:min-h-[250px] flex items-center">
-             <div className="p-6 md:p-8 w-full flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8">
-                <div className="flex-1 text-center md:text-left">
-                   <div className="flex items-center justify-center md:justify-start gap-3 mb-2 md:mb-4">
-                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-                        <Trophy className="h-4 w-4 md:h-5 md:w-5" />
-                      </div>
-                      <h3 className="text-xl md:text-2xl font-bold">Global Leaderboards</h3>
-                   </div>
-                   <p className="text-muted-foreground text-sm md:text-base">
-                      Compete with peers based on study hours and tasks completed.
-                   </p>
-                </div>
-                <div className="flex gap-3 md:gap-4 w-full md:w-auto justify-center">
-                   <div className="px-4 py-2 md:px-6 md:py-4 rounded-xl md:rounded-2xl bg-background/50 border border-border/50 text-center shadow-lg">
-                      <div className="text-xl md:text-2xl font-bold">#1</div>
-                      <div className="text-[10px] md:text-xs text-muted-foreground uppercase">Rank</div>
-                   </div>
-                   <div className="px-4 py-2 md:px-6 md:py-4 rounded-xl md:rounded-2xl bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 text-center shadow-lg">
-                      <div className="text-xl md:text-2xl font-bold text-yellow-500">Gold</div>
-                      <div className="text-[10px] md:text-xs text-yellow-600/80 uppercase">League</div>
-                   </div>
-                </div>
-             </div>
+          <SpotlightCard id="leaderboard" className="md:col-span-6 p-8 md:p-16 min-h-[450px] flex flex-col md:flex-row items-center gap-12 bg-[#050505] border-yellow-500/10">
+              <div className="flex-1 text-center md:text-left">
+                 <h3 className="text-5xl md:text-8xl font-black tracking-tighter italic uppercase mb-6 leading-none">Hall of <span className="text-yellow-500">Fame</span></h3>
+                 <p className="text-muted-foreground text-sm md:text-xl mb-10 leading-relaxed">
+                   Rankings updated in real-time based on cognitive output and streak consistency.
+                 </p>
+                 <Button variant="outline" className="rounded-full border-2 h-14 md:h-16 px-8 md:px-12 font-black uppercase tracking-widest italic hover:bg-white hover:text-black transition-all" onClick={() => navigate('/leaderboard')}>
+                    View Global Rankings
+                 </Button>
+              </div>
+              <Trophy className="h-32 w-32 md:h-48 md:w-48 text-yellow-500/20 drop-shadow-[0_0_30px_rgba(234,179,8,0.2)]" />
           </SpotlightCard>
         </div>
       </section>
 
+      {/* CALL TO ACTION */}
+      <section className="container mx-auto px-4 py-32 md:py-64">
+          <div className="rounded-[2.5rem] md:rounded-[4rem] bg-gradient-to-b from-primary to-purple-900 p-12 md:p-32 relative overflow-hidden text-center group border border-white/20 shadow-2xl">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1),transparent_70%)] opacity-50" />
+              <h2 className="text-5xl md:text-[clamp(4rem,10vw,10rem)] font-black tracking-tighter italic uppercase text-white mb-10 md:mb-16 relative z-10 leading-[0.85]">
+                Initiate <br /> Protocol
+              </h2>
+              <Button onClick={() => navigate("/auth")} size="lg" className="rounded-full bg-white text-black h-16 md:h-24 px-10 md:px-16 text-lg md:text-2xl font-black uppercase tracking-[0.4em] hover:scale-110 transition-all relative z-10">
+                 Connect Now
+              </Button>
+          </div>
+      </section>
+
       {/* FOOTER */}
-      <footer className="border-t border-border/40 py-8 md:py-12 bg-background/50 backdrop-blur-lg">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
-           <div className="flex items-center gap-2 opacity-80">
-              <BookOpen className="h-5 w-5 text-primary" />
-              <span className="font-bold">StudySync</span>
-           </div>
-           
-           <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-              <a href="#" className="hover:text-primary transition-colors">Terms</a>
-              <a href="#" className="hover:text-primary transition-colors">Twitter</a>
-           </div>
-           
-           <p className="text-xs text-muted-foreground">© 2025 StudySync Inc.</p>
+      <footer className="border-t border-white/5 py-16 md:py-24 bg-black">
+        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center md:items-end gap-12 text-center md:text-left">
+            <div className="space-y-6">
+                <div className="flex items-center gap-3 justify-center md:justify-start">
+                  <Layers className="h-6 w-6 md:h-8 md:w-8 text-primary fill-current" />
+                  <span className="font-black tracking-tighter text-3xl md:text-4xl uppercase italic">StudySync</span>
+                </div>
+                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] text-white/20 leading-relaxed">
+                  Advanced Cognitive OS <br /> Global Scholar Network <br /> v2.0 Production Build
+                </p>
+            </div>
+            <div className="text-center md:text-right">
+               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-2 italic">Precision Learning</p>
+               <p className="text-3xl md:text-5xl font-black italic text-white/5 tracking-tighter uppercase leading-none">Victory Favors <br className="md:hidden" /> the Disciplined</p>
+            </div>
         </div>
       </footer>
       
       <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-marquee {
-          animation: marquee 30s linear infinite;
-        }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        .animate-float { animation: float 6.s ease-in-out infinite; }
+        @keyframes slide-right { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .animate-slide-right { animation: slide-right 3s linear infinite; }
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .animate-marquee { animation: marquee 30s linear infinite; }
       `}</style>
     </div>
   );
