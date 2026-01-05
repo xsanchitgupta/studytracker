@@ -163,6 +163,12 @@ export default function AdminPanel() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<string>("");
   const [showSyncDialog, setShowSyncDialog] = useState<string | null>(null);
+  
+  // New states for enhanced features
+  const [editingPlaylistId, setEditingPlaylistId] = useState<string | null>(null);
+  const [editingPlaylistDesc, setEditingPlaylistDesc] = useState("");
+  const [selectedLectures, setSelectedLectures] = useState<Set<string>>(new Set());
+  const [previewPlaylistId, setPreviewPlaylistId] = useState<string | null>(null);
 
   // Enhanced admin features
   const [bannedUsers, setBannedUsers] = useState<Set<string>>(new Set());
@@ -758,6 +764,89 @@ export default function AdminPanel() {
     } catch (error) {
       console.error("Error toggling playlist visibility:", error);
       toast.error("Failed to update playlist");
+    }
+  };
+
+  const updatePlaylistDescription = async (id: string, description: string) => {
+    try {
+      await updateDoc(doc(db, "playlists_global", id), {
+        description: description.trim(),
+      });
+      setPlaylists(ps => ps.map(p => p.id === id ? { ...p, description: description.trim() } : p));
+      toast.success("Description updated successfully");
+      setEditingPlaylistId(null);
+      setEditingPlaylistDesc("");
+    } catch (error) {
+      console.error("Error updating description:", error);
+      toast.error("Failed to update description");
+    }
+  };
+
+  const bulkDeleteLectures = async (playlistId: string, lectureIds: string[]) => {
+    if (!confirm(`Delete ${lectureIds.length} lecture(s)?`)) return;
+    
+    try {
+      const playlist = playlists.find(p => p.id === playlistId);
+      if (!playlist) return;
+
+      const updatedLectures = playlist.lectures.filter(l => !lectureIds.includes(l.id));
+      
+      await updateDoc(doc(db, "playlists_global", playlistId), {
+        lectures: updatedLectures,
+      });
+
+      setPlaylists(ps => ps.map(p => p.id === playlistId ? { ...p, lectures: updatedLectures } : p));
+      setSelectedLectures(new Set());
+      toast.success(`Deleted ${lectureIds.length} lecture(s)`);
+    } catch (error) {
+      console.error("Error deleting lectures:", error);
+      toast.error("Failed to delete lectures");
+    }
+  };
+
+  const reorderLecture = async (playlistId: string, lectureId: string, direction: "up" | "down") => {
+    try {
+      const playlist = playlists.find(p => p.id === playlistId);
+      if (!playlist) return;
+
+      const index = playlist.lectures.findIndex(l => l.id === lectureId);
+      if (index === -1) return;
+      if (direction === "up" && index === 0) return;
+      if (direction === "down" && index === playlist.lectures.length - 1) return;
+
+      const newIndex = direction === "up" ? index - 1 : index + 1;
+      const updated = [...playlist.lectures];
+      [updated[index], updated[newIndex]] = [updated[newIndex], updated[index]];
+
+      await updateDoc(doc(db, "playlists_global", playlistId), {
+        lectures: updated,
+      });
+
+      setPlaylists(ps => ps.map(p => p.id === playlistId ? { ...p, lectures: updated } : p));
+    } catch (error) {
+      console.error("Error reordering lecture:", error);
+      toast.error("Failed to reorder lecture");
+    }
+  };
+
+  const duplicatePlaylist = async (playlistId: string) => {
+    try {
+      const playlist = playlists.find(p => p.id === playlistId);
+      if (!playlist) return;
+
+      await addDoc(collection(db, "playlists_global"), {
+        title: `${playlist.title} (Copy)`,
+        description: playlist.description || "",
+        lectures: playlist.lectures,
+        isPublic: false,
+        createdAt: serverTimestamp(),
+        createdBy: currentUser?.uid,
+      });
+
+      toast.success("Playlist duplicated successfully");
+    } catch (error) {
+      console.error("Error duplicating playlist:", error);
+      toast.error("Failed to duplicate playlist");
     }
   };
 

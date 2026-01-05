@@ -278,6 +278,9 @@ export default function Playlists() {
   // Recently viewed
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewed[]>([]);
 
+  // Store user-specific data for admin playlists (notes, timestamps, watch time, tags)
+  const [adminPlaylistUserData, setAdminPlaylistUserData] = useState<Record<string, Record<string, any>>>({});
+
   // Notes templates
   const noteTemplates: NoteTemplate[] = [
     { name: "Summary", content: "## Summary\n\nKey Points:\n- \n- \n- \n\nTakeaways:\n- " },
@@ -364,24 +367,40 @@ export default function Playlists() {
           const adminSnap = await getDocs(
             query(collection(db, "playlists_global"), where("isPublic", "==", true))
           );
+          
+          // Load user-specific data for admin playlists
+          const userDataSnap = await getDocs(
+            collection(db, "users", user.uid, "admin_playlist_data")
+          );
+          const userData: Record<string, any> = {};
+          userDataSnap.forEach((d) => {
+            userData[d.id] = d.data();
+          });
+          setAdminPlaylistUserData(userData);
+
           const adminPlaylistsData = adminSnap.docs.map((d) => {
             const data = d.data();
-            // Convert admin format to user format
+            const playlistUserData = userData[d.id] || {};
+            
+            // Convert admin format to user format with user-specific data merged
             return {
               id: d.id,
               title: data.title,
               description: data.description || "",
-              lectures: (data.lectures || []).map((l: any) => ({
-                id: l.id || crypto.randomUUID(),
-                title: l.title,
-                videoId: l.videoId,
-                completed: false,
-                notes: "",
-                watchTime: 0,
-                createdAt: Date.now(),
-                tags: [],
-                timestampNotes: [],
-              })),
+              lectures: (data.lectures || []).map((l: any) => {
+                const lectureUserData = playlistUserData.lectures?.[l.id] || {};
+                return {
+                  id: l.id || crypto.randomUUID(),
+                  title: l.title,
+                  videoId: l.videoId,
+                  completed: lectureUserData.completed || false,
+                  notes: lectureUserData.notes || "",
+                  watchTime: lectureUserData.watchTime || 0,
+                  createdAt: Date.now(),
+                  tags: lectureUserData.tags || [],
+                  timestampNotes: lectureUserData.timestampNotes || [],
+                };
+              }),
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate().getTime() : Date.now(),
               isFromAdmin: true,
               adminPlaylistId: d.id,
@@ -654,29 +673,53 @@ export default function Playlists() {
   const toggleComplete = async (p: Playlist, lid: string) => {
     if (!user) return;
 
-    // Don't allow completion toggle for admin playlists
-    if (p.isFromAdmin) {
-      toast({
-        title: "Read-only playlist",
-        description: "You cannot modify recommended playlists",
-        variant: "destructive",
-      });
-      return;
-    }
-
     const updated = p.lectures.map((l) =>
       l.id === lid ? { ...l, completed: !l.completed } : l
     );
 
     try {
-      await updateDoc(
-        doc(db, "users", user.uid, "playlists", p.id),
-        { lectures: updated }
-      );
+      if (p.isFromAdmin) {
+        // Handle admin playlist - save to user-specific data
+        const userDataRef = doc(db, "users", user.uid, "admin_playlist_data", p.id);
+        const lectureData: Record<string, any> = {};
+        updated.forEach((l) => {
+          lectureData[l.id] = {
+            notes: l.notes || "",
+            completed: l.completed || false,
+            watchTime: l.watchTime || 0,
+            tags: l.tags || [],
+            timestampNotes: l.timestampNotes || [],
+          };
+        });
 
-      setPlaylists((ps) =>
-        ps.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
-      );
+        await updateDoc(userDataRef, {
+          lectures: lectureData,
+          lastUpdated: Date.now(),
+        }).catch(async (e) => {
+          // If document doesn't exist, create it using setDoc
+          if (e.code === "not-found") {
+            const { setDoc } = await import("firebase/firestore");
+            await setDoc(userDataRef, {
+              lectures: lectureData,
+              lastUpdated: Date.now(),
+            });
+          }
+        });
+
+        setAdminPlaylists((ps) =>
+          ps.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
+        );
+      } else {
+        // Handle regular playlist
+        await updateDoc(
+          doc(db, "users", user.uid, "playlists", p.id),
+          { lectures: updated }
+        );
+
+        setPlaylists((ps) =>
+          ps.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x))
+        );
+      }
     } catch (error: any) {
       console.error("Error toggling completion:", error);
       toast({
@@ -704,36 +747,80 @@ export default function Playlists() {
         return;
       }
 
-      // Don't save notes for admin playlists (read-only)
-      if (currentActive.isAdmin) {
-        setSaveStatus("idle");
-        return;
-      }
-
       setSaveStatus("saving");
 
       try {
-        setPlaylists((currentPlaylists) => {
-          const p = currentPlaylists.find((p) => p.id === currentActive.pid);
-          if (!p) return currentPlaylists;
+        // Check if this is an admin playlist
+        if (currentActive.isAdmin) {
+          // Save to user-specific admin playlist data
+          const playlistId = currentActive.pid;
+          const lectureId = currentActive.lid;
+          
+          // Get current admin playlist to update local state
+          setAdminPlaylists((currentPlaylists) => {
+            const p = currentPlaylists.find((p) => p.id === playlistId);
+            if (!p) return currentPlaylists;
 
-          const updated = p.lectures.map((l) =>
-            l.id === currentActive.lid
-              ? { ...l, notes: sanitizeNotes(text) }
-              : l
-          );
+            const updated = p.lectures.map((l) =>
+              l.id === lectureId ? { ...l, notes: sanitizeNotes(text) } : l
+            );
 
-          // Trigger Firestore update
-          updateDoc(
-            doc(db, "users", user.uid, "playlists", p.id),
-            { lectures: updated }
-          ).catch(e => {
-            console.error("Save error", e);
-            setSaveStatus("idle");
+            // Update Firestore - store in user's admin_playlist_data
+            const userDataRef = doc(db, "users", user.uid, "admin_playlist_data", playlistId);
+            const lectureData: Record<string, any> = {};
+            updated.forEach((l) => {
+              lectureData[l.id] = {
+                notes: l.notes || "",
+                completed: l.completed || false,
+                watchTime: l.watchTime || 0,
+                tags: l.tags || [],
+                timestampNotes: l.timestampNotes || [],
+              };
+            });
+
+            updateDoc(userDataRef, {
+              lectures: lectureData,
+              lastUpdated: Date.now(),
+            }).catch((e) => {
+              // If document doesn't exist, create it
+              if (e.code === "not-found") {
+                addDoc(collection(db, "users", user.uid, "admin_playlist_data"), {
+                  playlistId,
+                  lectures: lectureData,
+                  lastUpdated: Date.now(),
+                }).catch((err) => console.error("Create error", err));
+              } else {
+                console.error("Save error", e);
+              }
+              setSaveStatus("idle");
+            });
+
+            return currentPlaylists.map((x) => (x.id === playlistId ? { ...x, lectures: updated } : x));
           });
+        } else {
+          // Regular playlist - save normally
+          setPlaylists((currentPlaylists) => {
+            const p = currentPlaylists.find((p) => p.id === currentActive.pid);
+            if (!p) return currentPlaylists;
 
-          return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x));
-        });
+            const updated = p.lectures.map((l) =>
+              l.id === currentActive.lid
+                ? { ...l, notes: sanitizeNotes(text) }
+                : l
+            );
+
+            // Trigger Firestore update
+            updateDoc(
+              doc(db, "users", user.uid, "playlists", p.id),
+              { lectures: updated }
+            ).catch(e => {
+              console.error("Save error", e);
+              setSaveStatus("idle");
+            });
+
+            return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updated } : x));
+          });
+        }
 
         setSaveStatus("saved");
         isDirtyRef.current = false;
@@ -1045,35 +1132,76 @@ export default function Playlists() {
     if (!active || !user || !note.trim()) return;
 
     try {
-      setPlaylists((currentPlaylists) => {
-        const p = currentPlaylists.find((p) => p.id === active.pid);
-        if (!p) return currentPlaylists;
+      const newTimestampNote: TimestampNote = {
+        id: crypto.randomUUID(),
+        timestamp,
+        note: note.trim(),
+        createdAt: Date.now(),
+      };
 
-        const newTimestampNote: TimestampNote = {
-          id: crypto.randomUUID(),
-          timestamp,
-          note: note.trim(),
-          createdAt: Date.now(),
-        };
+      if (active.isAdmin) {
+        // Handle admin playlist
+        setAdminPlaylists((currentPlaylists) => {
+          const p = currentPlaylists.find((p) => p.id === active.pid);
+          if (!p) return currentPlaylists;
 
-        const updatedLectures = p.lectures.map((l) => {
-          if (l.id !== active.lid) return l;
-          return {
-            ...l,
-            timestampNotes: [...(l.timestampNotes || []), newTimestampNote].sort(
-              (a, b) => a.timestamp - b.timestamp
-            ),
-          };
+          const updatedLectures = p.lectures.map((l) => {
+            if (l.id !== active.lid) return l;
+            return {
+              ...l,
+              timestampNotes: [...(l.timestampNotes || []), newTimestampNote].sort(
+                (a, b) => a.timestamp - b.timestamp
+              ),
+            };
+          });
+
+          // Save to user-specific admin playlist data
+          const userDataRef = doc(db, "users", user.uid, "admin_playlist_data", active.pid);
+          const lectureData: Record<string, any> = {};
+          updatedLectures.forEach((l) => {
+            lectureData[l.id] = {
+              notes: l.notes || "",
+              completed: l.completed || false,
+              watchTime: l.watchTime || 0,
+              tags: l.tags || [],
+              timestampNotes: l.timestampNotes || [],
+            };
+          });
+
+          updateDoc(userDataRef, {
+            lectures: lectureData,
+            lastUpdated: Date.now(),
+          }).catch((error) => {
+            console.error("Error adding timestamp note:", error);
+          });
+
+          return currentPlaylists.map((x) => (x.id === active.pid ? { ...x, lectures: updatedLectures } : x));
         });
+      } else {
+        // Handle regular playlist
+        setPlaylists((currentPlaylists) => {
+          const p = currentPlaylists.find((p) => p.id === active.pid);
+          if (!p) return currentPlaylists;
 
-        updateDoc(doc(db, "users", user.uid, "playlists", p.id), {
-          lectures: updatedLectures,
-        }).catch((error) => {
-          console.error("Error adding timestamp note:", error);
+          const updatedLectures = p.lectures.map((l) => {
+            if (l.id !== active.lid) return l;
+            return {
+              ...l,
+              timestampNotes: [...(l.timestampNotes || []), newTimestampNote].sort(
+                (a, b) => a.timestamp - b.timestamp
+              ),
+            };
+          });
+
+          updateDoc(doc(db, "users", user.uid, "playlists", p.id), {
+            lectures: updatedLectures,
+          }).catch((error) => {
+            console.error("Error adding timestamp note:", error);
+          });
+
+          return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x));
         });
-
-        return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x));
-      });
+      }
     } catch (error) {
       console.error("Error adding timestamp note:", error);
     }
@@ -1083,26 +1211,65 @@ export default function Playlists() {
     if (!active || !user) return;
 
     try {
-      setPlaylists((currentPlaylists) => {
-        const p = currentPlaylists.find((p) => p.id === active.pid);
-        if (!p) return currentPlaylists;
+      if (active.isAdmin) {
+        // Handle admin playlist
+        setAdminPlaylists((currentPlaylists) => {
+          const p = currentPlaylists.find((p) => p.id === active.pid);
+          if (!p) return currentPlaylists;
 
-        const updatedLectures = p.lectures.map((l) => {
-          if (l.id !== active.lid) return l;
-          return {
-            ...l,
-            timestampNotes: (l.timestampNotes || []).filter((tn) => tn.id !== timestampId),
-          };
+          const updatedLectures = p.lectures.map((l) => {
+            if (l.id !== active.lid) return l;
+            return {
+              ...l,
+              timestampNotes: (l.timestampNotes || []).filter((tn) => tn.id !== timestampId),
+            };
+          });
+
+          // Save to user-specific admin playlist data
+          const userDataRef = doc(db, "users", user.uid, "admin_playlist_data", active.pid);
+          const lectureData: Record<string, any> = {};
+          updatedLectures.forEach((l) => {
+            lectureData[l.id] = {
+              notes: l.notes || "",
+              completed: l.completed || false,
+              watchTime: l.watchTime || 0,
+              tags: l.tags || [],
+              timestampNotes: l.timestampNotes || [],
+            };
+          });
+
+          updateDoc(userDataRef, {
+            lectures: lectureData,
+            lastUpdated: Date.now(),
+          }).catch((error) => {
+            console.error("Error deleting timestamp note:", error);
+          });
+
+          return currentPlaylists.map((x) => (x.id === active.pid ? { ...x, lectures: updatedLectures } : x));
         });
+      } else {
+        // Handle regular playlist
+        setPlaylists((currentPlaylists) => {
+          const p = currentPlaylists.find((p) => p.id === active.pid);
+          if (!p) return currentPlaylists;
 
-        updateDoc(doc(db, "users", user.uid, "playlists", p.id), {
-          lectures: updatedLectures,
-        }).catch((error) => {
-          console.error("Error deleting timestamp note:", error);
+          const updatedLectures = p.lectures.map((l) => {
+            if (l.id !== active.lid) return l;
+            return {
+              ...l,
+              timestampNotes: (l.timestampNotes || []).filter((tn) => tn.id !== timestampId),
+            };
+          });
+
+          updateDoc(doc(db, "users", user.uid, "playlists", p.id), {
+            lectures: updatedLectures,
+          }).catch((error) => {
+            console.error("Error deleting timestamp note:", error);
+          });
+
+          return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x));
         });
-
-        return currentPlaylists.map((x) => (x.id === p.id ? { ...x, lectures: updatedLectures } : x));
-      });
+      }
     } catch (error) {
       console.error("Error deleting timestamp note:", error);
     }
