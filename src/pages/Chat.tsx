@@ -53,6 +53,32 @@ import {
   MessageStatus
 } from "@/lib/chatFeatures";
 
+// --- Utility Functions ---
+const getTimestamp = (createdAt: any): number => {
+  if (!createdAt) return 0;
+  if (typeof createdAt.toMillis === 'function') {
+    return createdAt.toMillis();
+  }
+  if (typeof createdAt.toDate === 'function') {
+    return createdAt.toDate().getTime();
+  }
+  if (createdAt instanceof Date) {
+    return createdAt.getTime();
+  }
+  return 0;
+};
+
+const toDate = (createdAt: any): Date => {
+  if (!createdAt) return new Date();
+  if (typeof createdAt.toDate === 'function') {
+    return createdAt.toDate();
+  }
+  if (createdAt instanceof Date) {
+    return createdAt;
+  }
+  return new Date();
+};
+
 // --- Types ---
 type ChatType = "channel" | "dm";
 
@@ -164,7 +190,7 @@ export default function Chat() {
   
   // New feature states
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [bookmarkedMessages, setBookmarkedMessages] = useState<string[]>([]);
@@ -465,8 +491,8 @@ export default function Chat() {
       }
     });
     return merged.sort((a, b) => {
-      const aTime = a.createdAt?.toMillis?.() || a.createdAt?.toDate?.()?.getTime() || 0;
-      const bTime = b.createdAt?.toMillis?.() || b.createdAt?.toDate?.()?.getTime() || 0;
+      const aTime = getTimestamp(a.createdAt);
+      const bTime = getTimestamp(b.createdAt);
       return aTime - bTime;
     });
   }, [messages, optimisticMessages]);
@@ -1099,8 +1125,7 @@ export default function Chat() {
     if (!searchQuery.trim()) return displayMessages;
     const query = searchQuery.toLowerCase();
     return displayMessages.filter(m => 
-      m.text.toLowerCase().includes(query) || 
-      m.senderName.toLowerCase().includes(query)
+      m.text.toLowerCase().includes(query)
     );
   }, [displayMessages, searchQuery]);
 
@@ -1511,23 +1536,6 @@ export default function Chat() {
              </div>
           </div>
           <div className="flex items-center gap-2">
-             {/* Search button */}
-             <TooltipProvider delayDuration={0}>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <Button 
-                     variant="ghost" 
-                     size="icon" 
-                     className="rounded-full hover:bg-primary/10"
-                     onClick={() => setSearchOpen(!searchOpen)}
-                   >
-                     <Search className="h-5 w-5" />
-                   </Button>
-                 </TooltipTrigger>
-                 <TooltipContent>Search Messages</TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-             
              {/* Block/Unblock button for DMs */}
              {activeChat?.type === 'dm' && activeChat.otherUserId && (
                <TooltipProvider delayDuration={0}>
@@ -1655,9 +1663,9 @@ export default function Chat() {
                  )}
                  {(searchQuery ? filteredMessages : displayMessages).map((m, i) => {
                     const prevM = (searchQuery ? filteredMessages : displayMessages)[i-1];
-                    const isSequence = prevM && prevM.senderId === m.senderId && (m.createdAt?.toMillis() - prevM.createdAt?.toMillis() < 300000);
-                    const date = m.createdAt?.toDate ? m.createdAt.toDate() : new Date();
-                    const showDateSeparator = !prevM || !isToday(date) || (prevM.createdAt?.toDate && !isToday(prevM.createdAt.toDate()));
+                    const isSequence = prevM && prevM.senderId === m.senderId && (getTimestamp(m.createdAt) - getTimestamp(prevM.createdAt) < 300000);
+                    const date = toDate(m.createdAt);
+                    const showDateSeparator = !prevM || !isToday(date) || !isToday(toDate(prevM.createdAt));
                     const isMe = user?.uid === m.senderId;
 
                     return (
@@ -1862,9 +1870,9 @@ export default function Chat() {
                    theme === "dark" ? "bg-black/60 border-white/10" : "bg-background/90 border-border"
                  )}>
                     <div className="flex gap-1 h-2 items-center">
-                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                       <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
+                       <span key="dot-1" className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                       <span key="dot-2" className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                       <span key="dot-3" className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></span>
                     </div>
                     <span className={cn("text-xs font-bold tracking-wide", theme === "dark" ? "text-white/90" : "text-foreground")}>
                       {typingUsers.length === 1 
@@ -2130,8 +2138,8 @@ export default function Chat() {
                       <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
                     </div>
                     <p className={cn("text-sm line-clamp-2", theme === "dark" ? "text-gray-300" : "text-muted-foreground")}>{m.text}</p>
-                    {m.createdAt?.toDate && (
-                      <p className="text-xs text-muted-foreground mt-1">{format(m.createdAt.toDate(), "MMM d, h:mm a")}</p>
+                    {m.createdAt && (
+                      <p className="text-xs text-muted-foreground mt-1">{format(toDate(m.createdAt), "MMM d, h:mm a")}</p>
                     )}
                   </div>
                 ))}
