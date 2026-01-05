@@ -1655,7 +1655,7 @@ export default function Chat() {
            <ScrollArea className="flex-1" onScrollCapture={(e) => {
               const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
               setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300);
-           }} style={{ paddingBottom: isRecordingVoice ? '180px' : '160px' }}>
+           }}>
               <div className="flex flex-col justify-end min-h-full py-4 sm:py-6 px-3 sm:px-4 md:px-8 space-y-4 sm:space-y-6">
                  {loadingMessages && (
                     <div className="flex items-center justify-center py-12">
@@ -1731,11 +1731,11 @@ export default function Chat() {
                                 </TooltipProvider>
                              </div>
 
-                             <div className="w-8 sm:w-10 shrink-0 pt-0.5 sm:pt-1">
+                             <div className="w-10 shrink-0 pt-1">
                                 {!isSequence ? (
                                    <Popover>
                                      <PopoverTrigger asChild>
-                                        <Avatar className="h-8 w-8 sm:h-10 sm:w-10 hover:scale-105 transition-transform duration-300 ring-2 ring-transparent hover:ring-white/20 cursor-pointer shadow-lg">
+                                        <Avatar className="h-10 w-10 hover:scale-105 transition-transform duration-300 ring-2 ring-transparent hover:ring-white/20 cursor-pointer shadow-lg">
                                            <AvatarImage src={m.senderPhoto} />
                                            <AvatarFallback className={cn("text-white font-bold", getAvatarColor(m.senderId))}>{(m.senderName || "?")[0]}</AvatarFallback>
                                         </Avatar>
@@ -1759,14 +1759,14 @@ export default function Chat() {
 
                              <div className="flex-1 min-w-0">
                                 {!isSequence && (
-                                   <div className="flex items-center gap-1 sm:gap-2 mb-1">
+                                   <div className="flex items-center gap-2 mb-1">
                                       <span 
-                                        className={cn("font-bold text-xs sm:text-base hover:underline cursor-pointer tracking-tight", theme === "dark" ? "text-white/90" : "text-foreground")}
+                                        className={cn("font-bold text-base hover:underline cursor-pointer tracking-tight", theme === "dark" ? "text-white/90" : "text-foreground")}
                                         onClick={() => {/* Can add quick profile trigger here too */}}
                                       >
                                         {m.senderName}
                                       </span>
-                                      <span className="text-[10px] sm:text-[11px] text-muted-foreground/60 font-medium">{format(date, "MM/dd/yyyy h:mm a")}</span>
+                                      <span className="text-[11px] text-muted-foreground/60 font-medium">{format(date, "MM/dd/yyyy h:mm a")}</span>
                                       {m.pinned && <Pin className="h-3 w-3 text-amber-500 fill-amber-500 rotate-45" />}
                                    </div>
                                 )}
@@ -1968,21 +1968,21 @@ export default function Chat() {
            <div className={cn("p-3 sm:p-4 md:px-6 md:pb-6 md:static fixed bottom-0 left-0 right-0 z-10 backdrop-blur-xl border-t md:border-t-0",
              theme === "dark" ? "bg-background/95 border-white/5" : "bg-background/95 border-border"
            )}>
-              <div className={cn("relative backdrop-blur-2xl rounded-2xl sm:rounded-3xl border shadow-lg sm:shadow-2xl focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/40 focus-within:shadow-[0_0_20px_rgba(var(--primary),0.15)] transition-all duration-300",
+              <div className={cn("relative backdrop-blur-2xl rounded-3xl border shadow-2xl focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/40 focus-within:shadow-[0_0_20px_rgba(var(--primary),0.15)] transition-all duration-300",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/80 border-border"
               )}>
                  {(replyingTo || imagePreview) && (
-                    <div className={cn("flex items-center justify-between p-2 sm:p-3 border-b rounded-t-2xl sm:rounded-t-3xl animate-in slide-in-from-bottom-2",
+                    <div className={cn("flex items-center justify-between p-3 border-b rounded-t-3xl animate-in slide-in-from-bottom-2",
                       theme === "dark" ? "border-white/5 bg-white/5" : "border-border bg-muted/30"
                     )}>
-                       <div className="flex items-center gap-2 sm:gap-3 text-xs overflow-hidden px-1 sm:px-2">
+                       <div className="flex items-center gap-3 text-xs overflow-hidden px-2">
                           {replyingTo && <div className="flex items-center gap-2 text-muted-foreground"><Reply className="h-3 w-3 text-primary" /><span className="font-bold text-foreground">Replying to {replyingTo.senderName}</span></div>}
                           {imagePreview && <div className={cn("flex items-center gap-2 border rounded-md p-1", theme === "dark" ? "border-white/10 bg-black/40" : "border-border bg-muted")}><img src={imagePreview} className="h-8 w-8 object-cover rounded" /><span className="text-muted-foreground font-medium">Image attached</span></div>}
                        </div>
                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-white/10" onClick={() => { setReplyingTo(null); cancelImage(); }}><X className="h-4 w-4" /></Button>
                     </div>
                  )}
-                 <div className="flex items-end p-1 sm:p-2 gap-1 sm:gap-2 flex-nowrap">
+                 <div className="flex items-end p-1.5 sm:p-2 gap-1.5 sm:gap-2 flex-wrap">
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                     <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-10 sm:w-10 rounded-full text-muted-foreground hover:text-white hover:bg-white/10 transition-colors shrink-0" onClick={() => fileInputRef.current?.click()}><Paperclip className="h-4 w-4 sm:h-5 sm:w-5" /></Button>
                     
@@ -2046,7 +2046,7 @@ export default function Chat() {
                         </Button>
                       </div>
                     )}
-                    <div className="relative flex-1 flex items-center min-h-[40px] sm:min-h-auto">
+                    <div className="relative flex-1">
                       <Textarea 
                         ref={textareaRef}
                         value={text} 
@@ -2063,8 +2063,8 @@ export default function Chat() {
                             // Could add keyboard navigation here
                           }
                         }} 
-                        placeholder={`Message #${activeChat.name}...`} 
-                        className={cn("border-0 bg-transparent focus-visible:ring-0 resize-none py-2.5 sm:py-3.5 px-1 sm:px-0 max-h-48 min-h-[40px] sm:min-h-[44px] text-sm sm:text-base placeholder:text-muted-foreground/40 placeholder:text-xs sm:placeholder:text-sm", theme === "dark" ? "text-white" : "text-foreground")} 
+                        placeholder={`Message #${activeChat.name}... (Press @ to mention)`} 
+                        className={cn("border-0 bg-transparent focus-visible:ring-0 resize-none py-3.5 max-h-48 min-h-[44px] text-base placeholder:text-muted-foreground/50", theme === "dark" ? "text-white" : "text-foreground")} 
                         rows={1} 
                       />
                       {/* Mention Popup positioned relative to textarea */}
@@ -2112,7 +2112,7 @@ export default function Chat() {
                       disabled={(!text.trim() && !imageFile) || isUploading} 
                       size="icon" 
                       className={cn(
-                        "h-9 w-9 sm:h-10 sm:w-10 rounded-full shrink-0 transition-all duration-300 shadow-lg", 
+                        "h-10 w-10 rounded-full shrink-0 mb-0.5 mr-1 transition-all duration-300 shadow-lg", 
                         text.trim() || imageFile ? "bg-primary text-primary-foreground scale-100 hover:scale-105 hover:shadow-glow-primary" : "bg-white/10 text-muted-foreground scale-90"
                       )} 
                       variant={text.trim() || imageFile ? "default" : "ghost"}
