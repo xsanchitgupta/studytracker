@@ -54,6 +54,29 @@ service cloud.firestore {
         allow delete: if isAuthenticated() && 
                          resource.data.senderId == request.auth.uid;
       }
+      
+      // Polls subcollection
+      match /polls/{pollId} {
+        // Anyone can read polls
+        allow read: if isAuthenticated();
+        
+        // Anyone can create polls
+        allow create: if isAuthenticated() && 
+                         request.resource.data.createdBy == request.auth.uid;
+        
+        // Anyone can update polls (for voting)
+        allow update: if isAuthenticated();
+        
+        // Only creator can delete polls
+        allow delete: if isAuthenticated() && 
+                         resource.data.createdBy == request.auth.uid;
+      }
+      
+      // Typing indicators subcollection
+      match /typing/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && userId == request.auth.uid;
+      }
     }
     
     // Global admin playlists - readable by all authenticated users
