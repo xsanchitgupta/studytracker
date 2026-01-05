@@ -101,7 +101,21 @@ interface Message {
   senderPhoto?: string;
   createdAt: any;
   imageUrl?: string;
-  type: "text" | "image";
+  type: "text" | "image" | "voice" | "poll";
+  voiceData?: string;
+  duration?: number;
+  poll?: {
+    question: string;
+    options: Array<{
+      id: string;
+      text: string;
+      votes: number;
+      voters: string[];
+    }>;
+    createdBy: string;
+    createdByName: string;
+    allowMultiple: boolean;
+  };
   replyTo?: { id: string; name: string; text: string };
   edited?: boolean;
   reactions?: Record<string, string[]>; 
@@ -1820,8 +1834,70 @@ export default function Chat() {
                                       </div>
                                    )}
                                    
-                                   {m.text}
-                                   {m.edited && <span className="text-[10px] text-muted-foreground ml-1">(edited)</span>}
+                                   {/* Poll rendering */}
+                                   {m.type === "poll" && (m as any).poll && (
+                                      <div className={cn("my-3 p-4 rounded-xl border", theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/50 border-border")}>
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <PollIcon className="h-4 w-4 text-primary" />
+                                          <h4 className="font-semibold text-sm">{(m as any).poll.question}</h4>
+                                        </div>
+                                        <div className="space-y-2">
+                                          {(m as any).poll.options.map((opt: any) => {
+                                            const totalVotes = (m as any).poll.options.reduce((sum: number, o: any) => sum + o.votes, 0);
+                                            const percentage = totalVotes > 0 ? (opt.votes / totalVotes) * 100 : 0;
+                                            const hasVoted = opt.voters?.includes(user?.uid);
+                                            return (
+                                              <button
+                                                key={opt.id}
+                                                onClick={async () => {
+                                                  if (!user) return;
+                                                  try {
+                                                    const newVoters = hasVoted 
+                                                      ? opt.voters.filter((v: string) => v !== user.uid)
+                                                      : [...(opt.voters || []), user.uid];
+                                                    const newVotes = newVoters.length;
+                                                    
+                                                    const updatedOptions = (m as any).poll.options.map((o: any) => 
+                                                      o.id === opt.id ? { ...o, votes: newVotes, voters: newVoters } : o
+                                                    );
+                                                    
+                                                    await updateDoc(doc(db, "chats", activeChat!.id, "messages", m.id), {
+                                                      poll: { ...(m as any).poll, options: updatedOptions }
+                                                    });
+                                                  } catch (error) {
+                                                    console.error("Error updating poll:", error);
+                                                  }
+                                                }}
+                                                className={cn("w-full text-left p-2.5 rounded-lg border transition-all hover:bg-opacity-80",
+                                                  hasVoted 
+                                                    ? "bg-primary/20 border-primary/40" 
+                                                    : theme === "dark" ? "bg-white/5 border-white/10 hover:bg-white/10" : "bg-muted/30 border-border hover:bg-muted/50"
+                                                )}
+                                              >
+                                                <div className="flex items-center justify-between mb-1">
+                                                  <span className="text-sm font-medium">{opt.text}</span>
+                                                  <span className="text-xs text-muted-foreground">{opt.votes} {opt.votes === 1 ? "vote" : "votes"}</span>
+                                                </div>
+                                                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                  <div 
+                                                    className={cn("h-full rounded-full transition-all", hasVoted ? "bg-primary" : "bg-primary/50")}
+                                                    style={{ width: `${percentage}%` }}
+                                                  />
+                                                </div>
+                                                <div className="text-xs text-muted-foreground mt-1">{percentage.toFixed(0)}%</div>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                   )}
+                                   
+                                   {m.type !== "poll" && (
+                                     <>
+                                       {m.text}
+                                       {m.edited && <span className="text-[10px] text-muted-foreground ml-1">(edited)</span>}
+                                     </>
+                                   )}
                                 </div>
                                 
                                 {m.reactions && Object.keys(m.reactions).length > 0 && (
@@ -2236,11 +2312,22 @@ export default function Chat() {
                       })),
                       createdBy: user.uid,
                       createdByName: formatName(user),
-                      createdAt: serverTimestamp(),
                       allowMultiple: false
                     };
 
-                    await addDoc(collection(db, "chats", activeChat.id, "polls"), pollData);
+                    // Save poll as a message
+                    await addDoc(collection(db, "chats", activeChat.id, "messages"), {
+                      text: `📊 Poll: ${pollQuestion.trim()}`,
+                      type: "poll",
+                      poll: pollData,
+                      senderId: user.uid,
+                      senderName: formatName(user),
+                      senderPhoto: profile?.photoURL || "",
+                      createdAt: serverTimestamp(),
+                      reactions: {},
+                      pinned: false
+                    });
+                    
                     toast.success("Poll created!");
                     setPollDialogOpen(false);
                     setPollQuestion("");
