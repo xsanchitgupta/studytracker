@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { 
   BookOpen, Search, LogOut, Settings, User as UserIcon,
-  Menu, X, ChevronRight, Bell, Command, Sparkles
+  Menu, X, ChevronRight, Bell, Command, Sparkles, MessageSquare, AlertCircle
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -17,6 +17,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { collection, onSnapshot, query, orderBy, limit, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toast } from "sonner";
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -24,6 +34,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // --- 1. CONFIGURATION ---
   const isStandalonePage = ["/", "/auth", "/chat"].includes(location.pathname);
@@ -35,6 +47,27 @@ export default function Layout() {
   }, []);
 
   useEffect(() => setMobileMenuOpen(false), [location.pathname]);
+
+  // Listen to notifications
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "users", user.uid, "notifications"),
+      orderBy("createdAt", "desc"),
+      limit(20)
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.read).length);
+    }, (error) => {
+      console.error("Error loading notifications:", error);
+    });
+
+    return () => unsub();
+  }, [user?.uid]);
 
   const navLinks = [
     { label: "Dashboard", href: "/dashboard" },
@@ -119,10 +152,94 @@ export default function Layout() {
               <ThemeToggle />
 
               {/* Notifications */}
-              <Button variant="ghost" size="icon" className="rounded-full relative hover:bg-primary/10 transition-colors group">
-                <Bell className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-red-500 rounded-full border-2 border-background animate-pulse" />
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full relative hover:bg-primary/10 transition-colors group">
+                    <Bell className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold text-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <h3 className="font-semibold text-sm">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={async () => {
+                          try {
+                            const batch = notifications
+                              .filter(n => !n.read)
+                              .map(n => updateDoc(doc(db, "users", user!.uid, "notifications", n.id), { read: true }));
+                            await Promise.all(batch);
+                            toast.success("All notifications marked as read");
+                          } catch (error) {
+                            console.error("Error marking as read:", error);
+                          }
+                        }}
+                      >
+                        Mark all read
+                      </Button>
+                    )}
+                  </div>
+                  <ScrollArea className="h-[400px]">
+                    {notifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-center">
+                        <Bell className="h-12 w-12 text-muted-foreground/30 mb-3" />
+                        <p className="text-sm text-muted-foreground">No notifications yet</p>
+                      </div>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {notifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            className={cn(
+                              "p-3 rounded-lg border transition-all cursor-pointer hover:bg-muted/50",
+                              notif.read ? "bg-background border-border" : "bg-primary/5 border-primary/20"
+                            )}
+                            onClick={async () => {
+                              if (!notif.read) {
+                                try {
+                                  await updateDoc(doc(db, "users", user!.uid, "notifications", notif.id), { read: true });
+                                } catch (error) {
+                                  console.error("Error marking notification as read:", error);
+                                }
+                              }
+                              if (notif.chatId) {
+                                navigate("/chat");
+                              }
+                            }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                "p-2 rounded-lg shrink-0",
+                                notif.type === "message" ? "bg-blue-500/20 text-blue-500" : "bg-purple-500/20 text-purple-500"
+                              )}>
+                                {notif.type === "message" ? <MessageSquare className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm mb-1">{notif.title}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-2">{notif.message}</p>
+                                <p className="text-[10px] text-muted-foreground mt-2">
+                                  {notif.createdAt?.toDate ? new Date(notif.createdAt.toDate()).toLocaleString() : "Just now"}
+                                </p>
+                              </div>
+                              {!notif.read && (
+                                <div className="h-2 w-2 bg-primary rounded-full shrink-0 mt-1" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
               
               {/* Profile Dropdown */}
               <DropdownMenu>

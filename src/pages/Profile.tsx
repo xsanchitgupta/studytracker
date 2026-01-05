@@ -115,6 +115,7 @@ export default function Profile() {
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
   const [avatarUrl, setAvatarUrl] = useState(""); // FIXED: Local state for instant feedback
+  const [displayName, setDisplayName] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,10 +148,12 @@ export default function Profile() {
           setSemester(data.semester || "");
           setBio(data.bio || "");
           setLocation(data.location || "");
+          setDisplayName(data.name || user.displayName || "");
           // FIXED: Set initial avatar URL from Firestore
           setAvatarUrl(data.photoURL || user.photoURL || "");
         } else {
           setAvatarUrl(user.photoURL || "");
+          setDisplayName(user.displayName || "");
         }
 
         // Stats Calculation Logic...
@@ -235,12 +238,28 @@ export default function Profile() {
     if (!user) return;
     setSaving(true);
     try {
+      // Update Firestore
       await setDoc(doc(db, "users", user.uid), {
-        college, semester: semester, bio, location,
-        email: user.email, updatedAt: new Date(),
+        name: displayName,
+        college, 
+        semester: semester, 
+        bio, 
+        location,
+        email: user.email, 
+        updatedAt: new Date(),
       }, { merge: true });
+      
+      // Update Firebase Auth profile
+      if (displayName !== user.displayName) {
+        await updateProfile(user, { displayName: displayName });
+        await user.reload();
+      }
+      
       toast.success("Profile updated successfully!");
-    } catch (error) { toast.error("Failed to save profile"); }
+    } catch (error) { 
+      console.error("Error updating profile:", error);
+      toast.error("Failed to save profile"); 
+    }
     finally { setSaving(false); }
   };
 
@@ -483,6 +502,7 @@ export default function Profile() {
             <SpotlightCard className="p-6 space-y-6" noHover>
               <h3 className="font-bold text-lg flex items-center gap-2"><User className="h-5 w-5 text-primary" /> Edit Profile</h3>
               <div className="space-y-4">
+                <div className="space-y-2"><Label>Display Name</Label><Input value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Your name" className="bg-background/50" /></div>
                 <div className="space-y-2"><Label>College</Label><Input value={college} onChange={e => setCollege(e.target.value)} className="bg-background/50" /></div>
                 <div className="space-y-2"><Label>Semester</Label><Select value={semester?.toString()} onValueChange={v => setSemester(Number(v))}><SelectTrigger className="bg-background/50"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{[1, 2, 3, 4, 5, 6, 7, 8].map(s => <SelectItem key={s} value={s.toString()}>Semester {s}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label>Location</Label><Input value={location} onChange={e => setLocation(e.target.value)} className="bg-background/50" /></div>

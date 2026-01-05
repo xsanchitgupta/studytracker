@@ -48,6 +48,7 @@ import {
   UserCheck,
   BookOpen,
   TrendingUp,
+  Flag,
   AlertCircle,
   Plus,
   X,
@@ -230,31 +231,52 @@ export default function AdminPanel() {
   }, [activeTab, users]);
   useEffect(() => {
     setLoading(true);
+    // Remove orderBy to avoid index requirement issues
     const unsub = onSnapshot(
-      query(collection(db, "users"), orderBy("createdAt", "desc")),
+      collection(db, "users"),
       (snap) => {
         const usersData = snap.docs.map(async (d) => {
           const data = d.data();
           // Get user's playlist count
-          const playlistsSnap = await getDocs(collection(db, "users", d.id, "playlists"));
-          let totalWatchTime = 0;
-          playlistsSnap.forEach(p => {
-            const lectures = p.data().lectures || [];
-            totalWatchTime += lectures.reduce((acc: number, l: any) => acc + (l.watchTime || 0), 0);
-          });
+          try {
+            const playlistsSnap = await getDocs(collection(db, "users", d.id, "playlists"));
+            let totalWatchTime = 0;
+            playlistsSnap.forEach(p => {
+              const lectures = p.data().lectures || [];
+              totalWatchTime += lectures.reduce((acc: number, l: any) => acc + (l.watchTime || 0), 0);
+            });
 
-          return {
-            uid: d.id,
-            ...data,
-            playlistsCount: playlistsSnap.size,
-            totalWatchTime,
-            isActive: data.lastSignInAt && 
-              (data.lastSignInAt.toDate ? data.lastSignInAt.toDate().getTime() : data.lastSignInAt) > Date.now() - 7 * 24 * 60 * 60 * 1000
-          } as User;
+            return {
+              uid: d.id,
+              ...data,
+              playlistsCount: playlistsSnap.size,
+              totalWatchTime,
+              isActive: data.lastSignInAt && 
+                (data.lastSignInAt.toDate ? data.lastSignInAt.toDate().getTime() : data.lastSignInAt) > Date.now() - 7 * 24 * 60 * 60 * 1000
+            } as User;
+          } catch (error) {
+            console.error(`Error loading data for user ${d.id}:`, error);
+            return {
+              uid: d.id,
+              ...data,
+              playlistsCount: 0,
+              totalWatchTime: 0,
+              isActive: false
+            } as User;
+          }
         });
         
         Promise.all(usersData).then(resolved => {
-          setUsers(resolved);
+          // Sort by createdAt in memory instead
+          const sorted = resolved.sort((a, b) => {
+            const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+            const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+            return bTime - aTime;
+          });
+          setUsers(sorted);
+          setLoading(false);
+        }).catch(error => {
+          console.error("Error processing users:", error);
           setLoading(false);
         });
       },
@@ -974,7 +996,7 @@ export default function AdminPanel() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={cn("grid w-full grid-cols-9 overflow-x-auto",
+          <TabsList className={cn("grid w-full grid-cols-10 overflow-x-auto",
             theme === "dark" ? "bg-background/40" : "bg-background/60"
           )}>
             <TabsTrigger value="overview" className="flex items-center gap-2">
@@ -991,6 +1013,9 @@ export default function AdminPanel() {
             </TabsTrigger>
             <TabsTrigger value="sync" className="flex items-center gap-2">
               <Globe className="h-4 w-4" /> Sync
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <Flag className="h-4 w-4" /> Reports
             </TabsTrigger>
             <TabsTrigger value="moderation" className="flex items-center gap-2">
               <Shield className="h-4 w-4" /> Moderation
@@ -1571,6 +1596,11 @@ export default function AdminPanel() {
             </div>
           </TabsContent>
 
+          {/* Reports Tab */}
+          <TabsContent value="reports" className="space-y-4">
+            <ReportsTab />
+          </TabsContent>
+
           {/* Sync Tab */}
           <TabsContent value="sync" className="space-y-4">
             <Card className={cn("backdrop-blur-xl border",
@@ -1960,6 +1990,170 @@ export default function AdminPanel() {
         </Dialog>
       </main>
     </div>
+  );
+}
+
+// Reports Tab Component
+function ReportsTab() {
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    setLoading(true);
+    const q = filter === "all" 
+      ? query(collection(db, "reports"), orderBy("createdAt", "desc"))
+      : query(collection(db, "reports"), where("status", "==", filter), orderBy("createdAt", "desc"));
+
+    const unsub = onSnapshot(q, (snap) => {
+      setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      console.error("Error loading reports:", error);
+      toast.error("Failed to load reports");
+      setLoading(false);
+    });
+
+    return () => unsub();
+  }, [filter]);
+
+  const updateReportStatus = async (reportId: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, "reports", reportId), {
+        status: newStatus,
+        resolvedAt: newStatus !== "pending" ? serverTimestamp() : null
+      });
+      toast.success(`Report marked as ${newStatus}`);
+    } catch (error) {
+      console.error("Error updating report:", error);
+      toast.error("Failed to update report");
+    }
+  };
+
+  const deleteReport = async (reportId: string) => {
+    if (!confirm("Are you sure you want to delete this report?")) return;
+    
+    try {
+      await deleteDoc(doc(db, "reports", reportId));
+      toast.success("Report deleted");
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      toast.error("Failed to delete report");
+    }
+  };
+
+  const getCategoryBadge = (category: string) => {
+    const styles = {
+      spam: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+      harassment: "bg-red-500/20 text-red-400 border-red-500/30",
+      violence: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+      inappropriate: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+      other: "bg-blue-500/20 text-blue-400 border-blue-500/30"
+    };
+    return styles[category as keyof typeof styles] || styles.other;
+  };
+
+  return (
+    <Card className={cn("backdrop-blur-xl border", theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/60 border-border")}>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-red-500" />
+              Reported Messages
+            </CardTitle>
+            <CardDescription>Review and manage user reports</CardDescription>
+          </div>
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Reports</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="reviewed">Reviewed</SelectItem>
+              <SelectItem value="resolved">Resolved</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading reports...</p>
+          </div>
+        ) : reports.length === 0 ? (
+          <div className="text-center py-12">
+            <Flag className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+            <p className="text-muted-foreground">No reports found</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {reports.map((report) => (
+              <div key={report.id} className={cn("p-4 rounded-lg border", theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/30 border-border")}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className={getCategoryBadge(report.category)}>
+                        {report.category}
+                      </Badge>
+                      <Badge variant={report.status === "pending" ? "destructive" : report.status === "resolved" ? "default" : "secondary"}>
+                        {report.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {report.createdAt?.toDate ? new Date(report.createdAt.toDate()).toLocaleString() : "Unknown"}
+                      </span>
+                    </div>
+                    
+                    <div className={cn("p-3 rounded border", theme === "dark" ? "bg-white/5 border-white/5" : "bg-background border-border")}>
+                      <p className="text-sm font-semibold mb-1">Reported Message:</p>
+                      <p className="text-sm">{report.messageText}</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        From: <span className="font-semibold">{report.messageSenderName}</span> in <span className="font-semibold">{report.chatName}</span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Report Reason:</p>
+                      <p className="text-sm text-muted-foreground">{report.reason}</p>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      Reported by: <span className="font-semibold">{report.reportedByName}</span> ({report.reportedByEmail})
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <Select
+                      value={report.status}
+                      onValueChange={(value) => updateReportStatus(report.id, value)}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="reviewed">Reviewed</SelectItem>
+                        <SelectItem value="resolved">Resolved</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deleteReport(report.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

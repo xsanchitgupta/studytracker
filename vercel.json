@@ -3,9 +3,9 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "outputDirectory": "dist",
-  "routes": [
+  "rewrites": [
     {
-      "src": "^/(?!_next/static|_next/image|favicon\\.ico).*",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

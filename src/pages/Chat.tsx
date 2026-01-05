@@ -18,7 +18,8 @@ import {
   Edit2, Reply, ChevronLeft, ArrowDown, Loader2, Users, 
   LogOut, Menu, Smile, Pin, Copy, Forward, Mail, Calendar,
   PanelLeftClose, PanelLeftOpen, Maximize2, Check, CheckCheck,
-  AtSign, Command, Filter
+  AtSign, Command, Filter, Flag, Ban, UserX, Bookmark, BookmarkCheck,
+  Mic, Square, Play, Pause, Volume2, BarChart3 as PollIcon
 } from "lucide-react";
 import { 
   Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle 
@@ -32,10 +33,25 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { format, isToday, isYesterday } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
+import { validateMessage, checkRateLimit } from "@/lib/security";
+import { 
+  markChatAsRead, 
+  setTypingStatus, 
+  searchMessages, 
+  extractMentions, 
+  highlightMentions,
+  bookmarkMessage,
+  removeBookmark,
+  parseMarkdown,
+  getMessageStatusIcon,
+  MessageStatus
+} from "@/lib/chatFeatures";
 
 // --- Types ---
 type ChatType = "channel" | "dm";
@@ -140,6 +156,26 @@ export default function Chat() {
   const [membersOpen, setMembersOpen] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [messageToReport, setMessageToReport] = useState<Message | null>(null);
+  const [reportCategory, setReportCategory] = useState("");
+  const [reportReason, setReportReason] = useState("");
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
+  
+  // New feature states
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [bookmarkedMessages, setBookmarkedMessages] = useState<string[]>([]);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceRecorder, setVoiceRecorder] = useState<MediaRecorder | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [pollDialogOpen, setPollDialogOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState(["", ""]);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Data State
   const [channels, setChannels] = useState<ChatSession[]>([]);
@@ -157,10 +193,7 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [messageToForward, setMessageToForward] = useState<Message | null>(null);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<Map<string, Message>>(new Map());
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -178,6 +211,78 @@ export default function Chat() {
   const mentionRef = useRef<HTMLDivElement>(null);
 
   // --- Effects ---
+
+  // Load blocked users
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubBlocked = onSnapshot(
+      collection(db, "users", user.uid, "blockedUsers"),
+      (snap) => {
+        const blocked = snap.docs.map(d => d.id);
+        setBlockedUsers(blocked);
+      },
+      (error) => console.error("Error loading blocked users:", error)
+    );
+    return () => unsubBlocked();
+  }, [user?.uid]);
+
+  // Load bookmarked messages
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubBookmarks = onSnapshot(
+      collection(db, "users", user.uid, "bookmarks"),
+      (snap) => {
+        const bookmarks = snap.docs.map(d => d.id);
+        setBookmarkedMessages(bookmarks);
+      },
+      (error) => console.error("Error loading bookmarks:", error)
+    );
+    return () => unsubBookmarks();
+  }, [user?.uid]);
+
+  // Load typing indicators for active chat
+  useEffect(() => {
+    if (!activeChat?.id) return;
+    
+    const unsubTyping = onSnapshot(
+      collection(db, "chats", activeChat.id, "typing"),
+      (snap) => {
+        const typing: Record<string, string> = {};
+        snap.docs.forEach(doc => {
+          if (doc.id !== user?.uid) { // Don't show own typing
+            typing[doc.id] = doc.data().userName;
+          }
+        });
+        setTypingUsers(typing);
+      },
+      (error) => console.error("Error loading typing indicators:", error)
+    );
+    
+    return () => unsubTyping();
+  }, [activeChat?.id, user?.uid]);
+
+  // Mark chat as read when viewing
+  useEffect(() => {
+    if (!activeChat?.id || !user?.uid) return;
+    
+    markChatAsRead(user.uid, activeChat.id);
+  }, [activeChat?.id, user?.uid]);
+
+  // Handle typing indicator
+  useEffect(() => {
+    if (!activeChat?.id || !user?.uid || !text.trim()) return;
+    
+    setTypingStatus(activeChat.id, user.uid, formatName(user), true);
+    
+    const timeout = setTimeout(() => {
+      setTypingStatus(activeChat.id, user.uid, formatName(user), false);
+    }, 3000);
+    
+    return () => {
+      clearTimeout(timeout);
+      setTypingStatus(activeChat.id, user.uid, formatName(user), false);
+    };
+  }, [text, activeChat?.id, user?.uid]);
 
   // 0. Load Channels from Firebase
   useEffect(() => {
@@ -481,6 +586,28 @@ export default function Chat() {
       return;
     }
 
+    // Validate message
+    const validation = validateMessage(text.trim(), imageFile ? "image" : undefined);
+    if (!validation.valid) {
+      toast.error(validation.error);
+      return;
+    }
+
+    // Rate limiting
+    const rateCheck = checkRateLimit();
+    if (!rateCheck.allowed) {
+      toast.error(rateCheck.error);
+      return;
+    }
+
+    // Check if user is blocked (for DMs)
+    if (activeChat.type === "dm" && activeChat.otherUserId) {
+      if (blockedUsers.includes(activeChat.otherUserId)) {
+        toast.error("You have blocked this user");
+        return;
+      }
+    }
+
     if (editingMessage) {
       await updateDoc(doc(db, "chats", activeChat.id, "messages", editingMessage.id), {
         text: text,
@@ -528,7 +655,7 @@ export default function Chat() {
         imageUrl = await getDownloadURL(snap.ref);
       }
 
-      await addDoc(collection(db, "chats", activeChat.id, "messages"), {
+      const msgRef = await addDoc(collection(db, "chats", activeChat.id, "messages"), {
         text: currentText,
         imageUrl: imageUrl,
         type: imageUrl ? "image" : "text",
@@ -542,8 +669,40 @@ export default function Chat() {
           id: currentReply.id,
           name: currentReply.senderName,
           text: currentReply.text
-        } : null
+        } : null,
+        status: 'sent'
       });
+      
+      // Update status to delivered after a short delay (simulated)
+      setTimeout(async () => {
+        try {
+          await updateDoc(doc(db, "chats", activeChat.id, "messages", msgRef.id), {
+            status: 'delivered'
+          });
+        } catch (e) {
+          console.error("Error updating status:", e);
+        }
+      }, 1000);
+
+      // Create notification for DM messages
+      if (activeChat.type === "dm" && activeChat.otherUserId) {
+        try {
+          await addDoc(collection(db, "users", activeChat.otherUserId, "notifications"), {
+            type: "message",
+            title: `New message from ${formatName(user)}`,
+            message: currentText || "Sent an image",
+            chatId: activeChat.id,
+            senderId: user.uid,
+            senderName: formatName(user),
+            senderPhoto: profile?.photoURL || "",
+            read: false,
+            createdAt: serverTimestamp(),
+          });
+        } catch (notifError) {
+          console.error("Error creating notification:", notifError);
+          // Don't fail the message send if notification fails
+        }
+      }
       
       // Remove optimistic message once real one is added
       setTimeout(() => {
@@ -656,6 +815,235 @@ export default function Chat() {
       setMessageToForward(null);
     } catch (e) {
       toast.error("Failed to forward");
+    }
+  };
+
+  const handleReportMessage = (message: Message) => {
+    setMessageToReport(message);
+    setReportDialogOpen(true);
+  };
+
+  const blockUser = async (userId: string, userName: string) => {
+    if (!user) return;
+    
+    if (!confirm(`Block ${userName}? They won't be able to send you messages.`)) {
+      return;
+    }
+
+    try {
+      await setDoc(doc(db, "users", user.uid, "blockedUsers", userId), {
+        blockedAt: serverTimestamp(),
+        userName: userName
+      });
+      toast.success(`${userName} has been blocked`);
+      
+      // Close the chat if currently viewing blocked user
+      if (activeChat?.type === "dm" && activeChat.otherUserId === userId) {
+        setActiveChat(null);
+      }
+    } catch (error) {
+      console.error("Error blocking user:", error);
+      toast.error("Failed to block user");
+    }
+  };
+
+  const unblockUser = async (userId: string, userName: string) => {
+    if (!user) return;
+
+    try {
+      await deleteDoc(doc(db, "users", user.uid, "blockedUsers", userId));
+      toast.success(`${userName} has been unblocked`);
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast.error("Failed to unblock user");
+    }
+  };
+
+  // Voice message recording
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Check if we still have activeChat
+        if (!activeChat || !user) {
+          toast.error("Chat session lost. Please try again.");
+          return;
+        }
+        
+        // Upload voice message
+        setIsUploading(true);
+        try {
+          console.log("Processing voice message...");
+          
+          // Convert blob to base64 for Firestore storage (works better for small files)
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          
+          const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+              if (reader.result) {
+                resolve(reader.result as string);
+              } else {
+                reject(new Error("Failed to convert audio"));
+              }
+            };
+            reader.onerror = reject;
+          });
+          
+          const voiceData = await base64Promise;
+          console.log("Voice converted to base64, sending message...");
+          
+          // Send as message with embedded audio data
+          await addDoc(collection(db, "chats", activeChat.id, "messages"), {
+            text: "🎤 Voice message",
+            voiceData: voiceData, // Base64 audio data
+            type: "voice",
+            duration: recordingDuration,
+            senderId: user.uid,
+            senderName: formatName(user),
+            senderPhoto: profile?.photoURL || "",
+            createdAt: serverTimestamp(),
+            reactions: {},
+            pinned: false,
+            replyTo: null
+          });
+          
+          console.log("Voice message sent successfully");
+          toast.success("Voice message sent");
+        } catch (error: any) {
+          console.error("Error sending voice:", error);
+          console.error("Error details:", error.message, error.code);
+          toast.error(`Failed to send voice message: ${error.message || 'Unknown error'}`);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      recorder.start();
+      setVoiceRecorder(recorder);
+      setIsRecordingVoice(true);
+      setRecordingDuration(0);
+      
+      // Start duration counter
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+      // Auto-stop after 60 seconds
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          stopVoiceRecording();
+        }
+      }, 60000);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      toast.error("Could not access microphone");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (voiceRecorder && voiceRecorder.state === 'recording') {
+      voiceRecorder.stop();
+      setIsRecordingVoice(false);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+    }
+  };
+
+  const cancelVoiceRecording = () => {
+    if (voiceRecorder) {
+      voiceRecorder.stop();
+      voiceRecorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecordingVoice(false);
+      setVoiceRecorder(null);
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      toast.info("Recording cancelled");
+    }
+  };
+
+  const deleteMessage = async (message: Message) => {
+    if (!activeChat || !user) return;
+    
+    const isSender = message.senderId === user.uid;
+    
+    if (isSender) {
+      // Sender can delete for everyone
+      const choice = confirm(
+        "Delete this message for everyone?\n\n" +
+        "This action cannot be undone."
+      );
+      
+      if (!choice) return;
+      
+      try {
+        await deleteDoc(doc(db, "chats", activeChat.id, "messages", message.id));
+        toast.success("Message deleted for everyone");
+      } catch (error) {
+        console.error("Error deleting message:", error);
+        toast.error("Failed to delete message");
+      }
+    } else {
+      // Non-sender can only hide message for themselves
+      const choice = confirm(
+        "Hide this message?\n\n" +
+        "This will only hide it for you. Others will still see it."
+      );
+      
+      if (!choice) return;
+      
+      try {
+        await setDoc(doc(db, "users", user.uid, "hiddenMessages", message.id), {
+          chatId: activeChat.id,
+          hiddenAt: serverTimestamp()
+        });
+        toast.success("Message hidden");
+      } catch (error) {
+        console.error("Error hiding message:", error);
+        toast.error("Failed to hide message");
+      }
+    }
+  };
+
+  const submitReport = async () => {
+    if (!user || !activeChat || !messageToReport || !reportCategory || !reportReason.trim()) {
+      toast.error("Please select a category and provide a reason");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "reports"), {
+        messageId: messageToReport.id,
+        chatId: activeChat.id,
+        chatName: activeChat.name,
+        messageText: messageToReport.text,
+        messageSenderId: messageToReport.senderId,
+        messageSenderName: messageToReport.senderName,
+        reportedBy: user.uid,
+        reportedByName: formatName(user),
+        reportedByEmail: user.email,
+        category: reportCategory,
+        reason: reportReason.trim(),
+        status: "pending",
+        createdAt: serverTimestamp(),
+      });
+      toast.success("Message reported successfully");
+      setReportDialogOpen(false);
+      setMessageToReport(null);
+      setReportCategory("");
+      setReportReason("");
+    } catch (error) {
+      console.error("Error reporting message:", error);
+      toast.error("Failed to report message");
     }
   };
 
@@ -780,12 +1168,12 @@ export default function Chat() {
   }, [text]);
 
   const filteredUsersForMention = useMemo(() => {
-    if (!mentionQuery) return users.filter(u => u.uid !== user?.uid).slice(0, 5);
+    if (!mentionQuery) return users.filter(u => u.uid !== user?.uid && !blockedUsers.includes(u.uid)).slice(0, 5);
     const query = mentionQuery.toLowerCase();
     return users
-      .filter(u => u.uid !== user?.uid && u.name.toLowerCase().includes(query))
+      .filter(u => u.uid !== user?.uid && !blockedUsers.includes(u.uid) && u.name.toLowerCase().includes(query))
       .slice(0, 5);
-  }, [users, mentionQuery, user?.uid]);
+  }, [users, mentionQuery, user?.uid, blockedUsers]);
 
   // --- Components ---
 
@@ -921,7 +1309,7 @@ export default function Chat() {
                 <Pin className="h-3 w-3" /> Pinned
               </h3>
               <div className="space-y-1">
-                {users.filter(u => u.uid !== user?.uid && pinnedChats.includes(u.uid)).map(u => (
+                {users.filter(u => u.uid !== user?.uid && pinnedChats.includes(u.uid) && !blockedUsers.includes(u.uid)).map(u => (
                   <TooltipProvider key={u.uid} delayDuration={0}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -974,7 +1362,7 @@ export default function Chat() {
           <div>
             {!collapsed && <h3 className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest mb-3 px-2">Direct Messages</h3>}
             <div className="space-y-1">
-               {users.filter(u => u.uid !== user?.uid && !pinnedChats.includes(u.uid)).map(u => (
+               {users.filter(u => u.uid !== user?.uid && !pinnedChats.includes(u.uid) && !blockedUsers.includes(u.uid)).map(u => (
                  <TooltipProvider key={u.uid} delayDuration={0}>
                    <Tooltip>
                      <TooltipTrigger asChild>
@@ -1092,7 +1480,7 @@ export default function Chat() {
         {activeChat && (
         <>
         {/* Header */}
-        <header className={cn("h-16 px-6 flex items-center justify-between border-b backdrop-blur-x1 z-10 shadow-lg",
+        <header className={cn("h-16 px-6 flex items-center justify-between border-b backdrop-blur-x1 z-10 shadow-lg md:sticky md:top-0 fixed top-0 left-0 right-0",
           theme === "dark" ? "border-white/5 bg-background/30" : "border-border bg-background/80"
         )}>
           <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -1113,10 +1501,64 @@ export default function Chat() {
                        {users.find(u => u.uid === activeChat?.otherUserId)?.status === 'online' ? 'Online' : 'Offline'}
                      </p>
                    )}
+                   {/* Typing indicator */}
+                   {Object.keys(typingUsers).length > 0 && (
+                     <p className="text-xs text-muted-foreground italic animate-pulse">
+                       {Object.values(typingUsers).join(', ')} {Object.keys(typingUsers).length === 1 ? 'is' : 'are'} typing...
+                     </p>
+                   )}
                 </div>
              </div>
           </div>
           <div className="flex items-center gap-2">
+             {/* Search button */}
+             <TooltipProvider delayDuration={0}>
+               <Tooltip>
+                 <TooltipTrigger asChild>
+                   <Button 
+                     variant="ghost" 
+                     size="icon" 
+                     className="rounded-full hover:bg-primary/10"
+                     onClick={() => setSearchOpen(!searchOpen)}
+                   >
+                     <Search className="h-5 w-5" />
+                   </Button>
+                 </TooltipTrigger>
+                 <TooltipContent>Search Messages</TooltipContent>
+               </Tooltip>
+             </TooltipProvider>
+             
+             {/* Block/Unblock button for DMs */}
+             {activeChat?.type === 'dm' && activeChat.otherUserId && (
+               <TooltipProvider delayDuration={0}>
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     {blockedUsers.includes(activeChat.otherUserId) ? (
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         className="rounded-full hover:bg-green-500/10"
+                         onClick={() => unblockUser(activeChat.otherUserId!, activeChat.name)}
+                       >
+                         <UserX className="h-5 w-5 text-green-500" />
+                       </Button>
+                     ) : (
+                       <Button 
+                         variant="ghost" 
+                         size="icon" 
+                         className="rounded-full hover:bg-red-500/10"
+                         onClick={() => blockUser(activeChat.otherUserId!, activeChat.name)}
+                       >
+                         <Ban className="h-5 w-5 text-red-500" />
+                       </Button>
+                     )}
+                   </TooltipTrigger>
+                   <TooltipContent>
+                     {blockedUsers.includes(activeChat.otherUserId!) ? 'Unblock User' : 'Block User'}
+                   </TooltipContent>
+                 </Tooltip>
+               </TooltipProvider>
+             )}
             {pinnedMessages.length > 0 && (
               <TooltipProvider>
                 <Tooltip>
@@ -1246,12 +1688,22 @@ export default function Chat() {
                                   <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-white/10" onClick={() => setReplyingTo(m)}><Reply className={cn("h-4 w-4", theme === "dark" ? "text-gray-300" : "text-muted-foreground")} /></Button></TooltipTrigger><TooltipContent>Reply</TooltipContent></Tooltip>
                                   <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-white/10" onClick={() => initiateForward(m)}><Forward className={cn("h-4 w-4", theme === "dark" ? "text-gray-300" : "text-muted-foreground")} /></Button></TooltipTrigger><TooltipContent>Forward</TooltipContent></Tooltip>
                                   <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-white/10" onClick={() => handleCopy(m.text)}><Copy className={cn("h-4 w-4", theme === "dark" ? "text-gray-300" : "text-muted-foreground")} /></Button></TooltipTrigger><TooltipContent>Copy Text</TooltipContent></Tooltip>
+                                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-amber-500/10" onClick={async () => {
+                                    if (bookmarkedMessages.includes(m.id)) {
+                                      await removeBookmark(user.uid, m.id);
+                                      toast.success("Bookmark removed");
+                                    } else {
+                                      await bookmarkMessage(user.uid, activeChat.id, m.id, m);
+                                      toast.success("Message bookmarked");
+                                    }
+                                  }}>{bookmarkedMessages.includes(m.id) ? <BookmarkCheck className="h-4 w-4 text-amber-500 fill-amber-500" /> : <Bookmark className="h-4 w-4 text-gray-300" />}</Button></TooltipTrigger><TooltipContent>{bookmarkedMessages.includes(m.id) ? 'Remove Bookmark' : 'Bookmark'}</TooltipContent></Tooltip>
+                                  {m.senderId !== user?.uid && <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-red-500/10" onClick={() => handleReportMessage(m)}><Flag className={cn("h-4 w-4 text-red-500")} /></Button></TooltipTrigger><TooltipContent>Report</TooltipContent></Tooltip>}
                                   <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-white/10" onClick={() => handlePin(m)}><Pin className={cn("h-4 w-4", m.pinned ? "fill-yellow-500 text-yellow-500" : theme === "dark" ? "text-gray-300" : "text-muted-foreground")} /></Button></TooltipTrigger><TooltipContent>{m.pinned ? "Unpin" : "Pin"}</TooltipContent></Tooltip>
                                   {isMe && (
                                     <>
                                       <div className={cn("w-px h-4 mx-1", theme === "dark" ? "bg-white/10" : "bg-border")} />
                                       <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-white/10" onClick={() => { setEditingMessage(m); setText(m.text); }}><Edit2 className={cn("h-3 w-3", theme === "dark" ? "text-gray-300" : "text-muted-foreground")} /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip>
-                                      <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-red-500/20 hover:text-red-500" onClick={() => deleteDoc(doc(db, "chats", activeChat.id, "messages", m.id))}><Trash2 className="h-3 w-3" /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip>
+                                      <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-red-500/20 hover:text-red-500" onClick={() => deleteMessage(m)}><Trash2 className="h-3 w-3" /></Button></TooltipTrigger><TooltipContent>{m.senderId === user?.uid ? 'Delete for everyone' : 'Hide for me'}</TooltipContent></Tooltip>
                                     </>
                                   )}
                                 </TooltipProvider>
@@ -1320,6 +1772,46 @@ export default function Chat() {
                                         </DialogContent>
                                       </Dialog>
                                    )}
+                                   
+                                   {/* Voice message playback */}
+                                   {m.type === "voice" && (m as any).voiceData && (
+                                      <div className={cn("my-2 flex items-center gap-3 p-3 rounded-xl border max-w-xs",
+                                        theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/50 border-border"
+                                      )}>
+                                        <button
+                                          onClick={() => {
+                                            const audio = new Audio((m as any).voiceData);
+                                            if (playingVoiceId === m.id) {
+                                              audio.pause();
+                                              setPlayingVoiceId(null);
+                                            } else {
+                                              audio.play();
+                                              setPlayingVoiceId(m.id);
+                                              audio.onended = () => setPlayingVoiceId(null);
+                                            }
+                                          }}
+                                          className={cn("p-2 rounded-full transition-colors",
+                                            playingVoiceId === m.id 
+                                              ? "bg-primary text-primary-foreground" 
+                                              : "bg-primary/20 text-primary hover:bg-primary/30"
+                                          )}
+                                        >
+                                          {playingVoiceId === m.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                        </button>
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2">
+                                            <Volume2 className="h-3 w-3 text-muted-foreground" />
+                                            <div className="flex-1 h-1 bg-primary/20 rounded-full overflow-hidden">
+                                              <div className="h-full bg-primary w-1/3 rounded-full" />
+                                            </div>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            {(m as any).duration ? `${Math.floor((m as any).duration / 60)}:${((m as any).duration % 60).toString().padStart(2, '0')}` : '0:00'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                   )}
+                                   
                                    {m.text}
                                    {m.edited && <span className="text-[10px] text-muted-foreground ml-1">(edited)</span>}
                                 </div>
@@ -1389,7 +1881,9 @@ export default function Chat() {
            )}
 
            {/* Input Area */}
-           <div className="p-4 md:px-6 md:pb-6 bg-transparent">
+           <div className={cn("p-4 md:px-6 md:pb-6 md:static fixed bottom-0 left-0 right-0 z-10 backdrop-blur-xl border-t md:border-t-0",
+             theme === "dark" ? "bg-background/95 border-white/5" : "bg-background/95 border-border"
+           )}>
               <div className={cn("relative backdrop-blur-2xl rounded-3xl border shadow-2xl focus-within:ring-1 focus-within:ring-primary/40 focus-within:border-primary/40 focus-within:shadow-[0_0_20px_rgba(var(--primary),0.15)] transition-all duration-300",
                 theme === "dark" ? "bg-background/40 border-white/10" : "bg-background/80 border-border"
               )}>
@@ -1407,6 +1901,67 @@ export default function Chat() {
                  <div className="flex items-end p-2 gap-2">
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageSelect} />
                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full text-muted-foreground hover:text-white hover:bg-white/10 transition-colors shrink-0 mb-0.5" onClick={() => fileInputRef.current?.click()}><Paperclip className="h-5 w-5" /></Button>
+                    
+                    {/* Poll button */}
+                    <TooltipProvider delayDuration={0}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-10 w-10 rounded-full text-muted-foreground hover:text-white hover:bg-white/10 transition-colors shrink-0 mb-0.5" 
+                            onClick={() => setPollDialogOpen(true)}
+                          >
+                            <PollIcon className="h-5 w-5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Create Poll</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
+                    {/* Voice recording button */}
+                    {!isRecordingVoice ? (
+                      <TooltipProvider delayDuration={0}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-10 w-10 rounded-full text-muted-foreground hover:text-white hover:bg-white/10 transition-colors shrink-0 mb-0.5" 
+                              onClick={startVoiceRecording}
+                            >
+                              <Mic className="h-5 w-5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Record Voice Message</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/20 border border-red-500/30">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 bg-red-500 rounded-full animate-pulse" />
+                          <span className="text-sm font-medium text-red-500">
+                            {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+                          </span>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 rounded-full hover:bg-red-500/20" 
+                          onClick={stopVoiceRecording}
+                        >
+                          <Square className="h-4 w-4 text-red-500 fill-red-500" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 rounded-full hover:bg-white/10" 
+                          onClick={cancelVoiceRecording}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                     <div className="relative flex-1">
                       <Textarea 
                         ref={textareaRef}
@@ -1585,6 +2140,196 @@ export default function Chat() {
           </ScrollArea>
         </aside>
       )}
+
+      {/* Poll Creation Dialog */}
+      <Dialog open={pollDialogOpen} onOpenChange={setPollDialogOpen}>
+        <DialogContent className={cn("max-w-md", theme === "dark" ? "bg-background/95 border-white/10" : "bg-background")}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PollIcon className="h-5 w-5 text-primary" />
+              Create Poll
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Question *</Label>
+              <Input
+                placeholder="What's your question?"
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Options</Label>
+              {pollOptions.map((opt, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <Input
+                    placeholder={`Option ${idx + 1}`}
+                    value={opt}
+                    onChange={(e) => {
+                      const newOpts = [...pollOptions];
+                      newOpts[idx] = e.target.value;
+                      setPollOptions(newOpts);
+                    }}
+                  />
+                  {pollOptions.length > 2 && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {pollOptions.length < 6 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPollOptions([...pollOptions, ""])}
+                  className="w-full"
+                >
+                  + Add Option
+                </Button>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPollDialogOpen(false);
+                  setPollQuestion("");
+                  setPollOptions(["", ""]);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!pollQuestion.trim() || !activeChat || !user) return;
+                  const validOpts = pollOptions.filter(o => o.trim());
+                  if (validOpts.length < 2) {
+                    toast.error("Add at least 2 options");
+                    return;
+                  }
+
+                  try {
+                    const pollData = {
+                      question: pollQuestion.trim(),
+                      options: validOpts.map((text, idx) => ({
+                        id: `opt_${idx}`,
+                        text,
+                        votes: 0,
+                        voters: []
+                      })),
+                      createdBy: user.uid,
+                      createdByName: formatName(user),
+                      createdAt: serverTimestamp(),
+                      allowMultiple: false
+                    };
+
+                    await addDoc(collection(db, "chats", activeChat.id, "polls"), pollData);
+                    toast.success("Poll created!");
+                    setPollDialogOpen(false);
+                    setPollQuestion("");
+                    setPollOptions(["", ""]);
+                  } catch (error) {
+                    console.error("Error creating poll:", error);
+                    toast.error("Failed to create poll");
+                  }
+                }}
+                disabled={!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2}
+                className="flex-1"
+              >
+                Create Poll
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Dialog */}
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className={cn("max-w-md", theme === "dark" ? "bg-background/95 border-white/10" : "bg-background")}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-red-500" />
+              Report Message
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {messageToReport && (
+              <div className={cn("p-3 rounded-lg border", theme === "dark" ? "bg-white/5 border-white/10" : "bg-muted/50 border-border")}>
+                <p className="text-sm text-muted-foreground mb-1">Reporting message from:</p>
+                <p className="font-semibold">{messageToReport.senderName}</p>
+                <p className="text-sm mt-2 line-clamp-3">{messageToReport.text}</p>
+              </div>
+            )}
+            
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Category *</Label>
+              <RadioGroup value={reportCategory} onValueChange={setReportCategory}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="spam" id="spam" />
+                  <Label htmlFor="spam" className="cursor-pointer font-normal">Spam or Misleading</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="harassment" id="harassment" />
+                  <Label htmlFor="harassment" className="cursor-pointer font-normal">Harassment or Bullying</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="violence" id="violence" />
+                  <Label htmlFor="violence" className="cursor-pointer font-normal">Violence or Threats</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="inappropriate" id="inappropriate" />
+                  <Label htmlFor="inappropriate" className="cursor-pointer font-normal">Inappropriate Content</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="other" id="other" />
+                  <Label htmlFor="other" className="cursor-pointer font-normal">Other</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Additional Details *</Label>
+              <Textarea 
+                placeholder="Please provide more details about why you're reporting this message..."
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                className="min-h-[100px] resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setReportDialogOpen(false);
+                  setMessageToReport(null);
+                  setReportCategory("");
+                  setReportReason("");
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={submitReport}
+                disabled={!reportCategory || !reportReason.trim()}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+              >
+                Submit Report
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Forward Dialog */}
       <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>

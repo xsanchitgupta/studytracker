@@ -18,20 +18,25 @@ import {
   TrendingUp,
   Star,
   Trophy,
-  Zap
+  Zap,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 // --- SPOTLIGHT INPUT ---
-const SpotlightInput = ({ icon: Icon, className, containerClassName, ...props }: any) => {
+const SpotlightInput = ({ icon: Icon, className, containerClassName, showPasswordToggle, type, ...props }: any) => {
   const divRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [opacity, setOpacity] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!divRef.current) return;
     const rect = divRef.current.getBoundingClientRect();
     setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
   };
+
+  const inputType = showPasswordToggle ? (showPassword ? "text" : "password") : type;
 
   return (
     <div 
@@ -51,9 +56,22 @@ const SpotlightInput = ({ icon: Icon, className, containerClassName, ...props }:
       <div className="relative z-10 bg-background/80 backdrop-blur-2xl rounded-2xl border border-input/60 shadow-[0_2px_24px_0_rgba(124,58,237,0.08)] transition-all group-focus-within:border-primary group-focus-within:ring-4 group-focus-within:ring-primary/20">
         <Icon className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground transition-colors group-focus-within:text-primary" />
         <Input 
-          className={cn("pl-12 h-12 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base font-medium tracking-wide", className)} 
+          type={inputType}
+          className={cn("h-12 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base font-medium tracking-wide", 
+            showPasswordToggle ? "pl-12 pr-12" : "pl-12",
+            className
+          )} 
           {...props} 
         />
+        {showPasswordToggle && (
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-4 top-3.5 text-muted-foreground hover:text-primary transition-colors"
+          >
+            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -369,7 +387,8 @@ const Auth = () => {
                            </div>
                            <SpotlightInput 
                              icon={Lock}
-                             type="password" 
+                             type="password"
+                             showPasswordToggle={true}
                              placeholder="••••••••" 
                              value={password}
                              onChange={(e: any) => setPassword(e.target.value)}
@@ -410,7 +429,8 @@ const Auth = () => {
                            <Label className="text-base font-semibold">Password</Label>
                            <SpotlightInput 
                              icon={Lock}
-                             type="password" 
+                             type="password"
+                             showPasswordToggle={true}
                              placeholder="••••••••" 
                              value={password}
                              onChange={(e: any) => setPassword(e.target.value)}
