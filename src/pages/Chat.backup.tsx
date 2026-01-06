@@ -168,7 +168,6 @@ const COMMON_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🚀",
 // Default channels to create if none exist
 const DEFAULT_CHANNELS: ChatSession[] = [
   { id: "channel_general", type: "channel", name: "general", description: "General discussion", color: "text-blue-400" },
-  { id: "channel_ai_tutor", type: "channel", name: "ai-tutor", description: "🤖 AI Study Assistant - Ask me anything!", color: "text-cyan-400" },
   { id: "channel_homework", type: "channel", name: "homework-help", description: "Solve problems together", color: "text-emerald-400" },
   { id: "channel_resources", type: "channel", name: "resources", description: "Notes, links & PDFs", color: "text-orange-400" },
   { id: "channel_announcements", type: "channel", name: "announcements", description: "Important updates", color: "text-purple-400" },
@@ -224,10 +223,6 @@ export default function Chat() {
   const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<UserStatus[]>([]);
-  const [messageLimit, setMessageLimit] = useState(50); // Pagination
-  const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [aiProcessing, setAiProcessing] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   // Interaction State
@@ -343,14 +338,11 @@ export default function Chat() {
         
         if (snap.empty) {
           // Create default channels if none exist
-          console.log("Creating default channels including AI tutor...");
           for (const channel of DEFAULT_CHANNELS) {
             await setDoc(doc(db, "channels", channel.id), {
-              id: channel.id,
               name: channel.name,
               description: channel.description,
               type: "channel",
-              color: channel.color,
               createdAt: serverTimestamp(),
             }).catch(err => console.error("Error creating default channel:", err));
           }
@@ -358,7 +350,6 @@ export default function Chat() {
             setChannels(DEFAULT_CHANNELS);
             setActiveChat(DEFAULT_CHANNELS[0]);
           }
-          console.log("✅ Default channels created successfully!");
         } else {
           // Load existing channels
           const loadedChannels = snap.docs.map(doc => ({
@@ -629,99 +620,6 @@ export default function Chat() {
     }
   };
 
-  // AI Chat Integration
-  const sendToAI = async (userMessage: string, chatId: string) => {
-    setAiProcessing(true);
-    try {
-      // Check if VITE_OPENAI_API_KEY exists in env
-      const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-      
-      if (!apiKey) {
-        // Fallback to simple AI responses if no API key
-        const responses = [
-          "I'm here to help! However, the AI service needs to be configured. Please ask an administrator to set up the OpenAI API key.",
-          "Great question! I'd love to help, but I need proper API configuration first.",
-          "I'm your AI study assistant! To provide better answers, please ensure the system is properly configured with an OpenAI API key."
-        ];
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        
-        await addDoc(collection(db, "chats", chatId, "messages"), {
-          text: randomResponse,
-          senderId: "ai-assistant",
-          senderName: "AI Tutor 🤖",
-          senderPhoto: null,
-          createdAt: serverTimestamp(),
-          type: "text",
-          status: "sent"
-        });
-        setAiProcessing(false);
-        return;
-      }
-
-      // Get recent context (last 5 messages)
-      const recentMsgs = messages.slice(-5).map(m => ({
-        role: m.senderId === "ai-assistant" ? "assistant" : "user",
-        content: m.text
-      }));
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { 
-              role: 'system', 
-              content: 'You are a helpful, friendly study assistant. Help students with homework, explain concepts clearly, and encourage learning. Keep responses concise but informative.' 
-            },
-            ...recentMsgs,
-            { role: 'user', content: userMessage }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('AI service unavailable');
-      }
-
-      const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
-
-      // Send AI response
-      await addDoc(collection(db, "chats", chatId, "messages"), {
-        text: aiResponse,
-        senderId: "ai-assistant",
-        senderName: "AI Tutor 🤖",
-        senderPhoto: null,
-        createdAt: serverTimestamp(),
-        type: "text",
-        status: "sent"
-      });
-
-    } catch (error) {
-      console.error("AI Error:", error);
-      toast.error("AI assistant is temporarily unavailable");
-      
-      // Send fallback message
-      await addDoc(collection(db, "chats", chatId, "messages"), {
-        text: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment!",
-        senderId: "ai-assistant",
-        senderName: "AI Tutor 🤖",
-        senderPhoto: null,
-        createdAt: serverTimestamp(),
-        type: "text",
-        status: "sent"
-      });
-    } finally {
-      setAiProcessing(false);
-    }
-  };
-
   const handleSendMessage = useCallback(async () => {
     if ((!text.trim() && !imageFile) || !user || !activeChat) {
       if (!activeChat) toast.error("Please select a channel first");
@@ -812,14 +710,8 @@ export default function Chat() {
           name: currentReply.senderName,
           text: currentReply.text
         } : null,
-        status: 'sent',
-        readBy: [user.uid]
+        status: 'sent'
       });
-      
-      // Trigger AI response if in AI tutor channel and message is text
-      if (activeChat.id === "channel_ai_tutor" && currentText.trim() && !imageUrl) {
-        await sendToAI(currentText, activeChat.id);
-      }
       
       // Update status to delivered after a short delay (simulated)
       setTimeout(async () => {
@@ -956,9 +848,7 @@ export default function Chat() {
         createdAt: serverTimestamp(),
         reactions: {},
         pinned: false,
-        replyTo: null,
-        status: 'sent',
-        readBy: [user.uid]
+        replyTo: null 
       });
       toast.success("Message forwarded");
       setForwardDialogOpen(false);

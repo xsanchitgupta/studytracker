@@ -36,6 +36,7 @@ export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
 
   // --- 1. CONFIGURATION ---
   const isStandalonePage = ["/", "/auth", "/chat"].includes(location.pathname);
@@ -58,7 +59,7 @@ export default function Layout() {
       limit(20)
     );
 
-    const unsub = onSnapshot(q, (snap) => {
+    const unsubNotifs = onSnapshot(q, (snap) => {
       const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setNotifications(notifs);
       setUnreadCount(notifs.filter(n => !n.read).length);
@@ -66,7 +67,24 @@ export default function Layout() {
       console.error("Error loading notifications:", error);
     });
 
-    return () => unsub();
+    // Listen to platform announcements
+    const qAnnouncements = query(
+      collection(db, "announcements"),
+      orderBy("createdAt", "desc"),
+      limit(5)
+    );
+
+    const unsubAnnouncements = onSnapshot(qAnnouncements, (snap) => {
+      const anncs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAnnouncements(anncs.filter((a: any) => a.active));
+    }, (error) => {
+      console.error("Error loading announcements:", error);
+    });
+
+    return () => {
+      unsubNotifs();
+      unsubAnnouncements();
+    };
   }, [user?.uid]);
 
   const navLinks = [
@@ -165,7 +183,7 @@ export default function Layout() {
                 </PopoverTrigger>
                 <PopoverContent className="w-80 p-0" align="end">
                   <div className="flex items-center justify-between p-4 border-b">
-                    <h3 className="font-semibold text-sm">Notifications</h3>
+                    <h3 className="font-semibold text-sm">Notifications & Announcements</h3>
                     {unreadCount > 0 && (
                       <Button
                         variant="ghost"
@@ -188,12 +206,60 @@ export default function Layout() {
                     )}
                   </div>
                   <ScrollArea className="h-[400px]">
-                    {notifications.length === 0 ? (
+                    {/* Platform Announcements Section */}
+                    {announcements.length > 0 && (
+                      <div className="p-3 space-y-2 border-b bg-muted/20">
+                        <div className="flex items-center gap-2 px-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          <span className="text-xs font-semibold text-primary uppercase tracking-wider">Platform Announcements</span>
+                        </div>
+                        {announcements.map((announcement) => (
+                          <div
+                            key={announcement.id}
+                            className={cn(
+                              "p-3 rounded-lg border transition-all cursor-pointer hover:shadow-md",
+                              announcement.priority === "high" 
+                                ? "bg-red-500/10 border-red-500/30 hover:bg-red-500/20" 
+                                : announcement.priority === "normal"
+                                ? "bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20"
+                                : "bg-green-500/10 border-green-500/30 hover:bg-green-500/20"
+                            )}
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className={cn(
+                                "p-1.5 rounded-lg shrink-0",
+                                announcement.priority === "high" ? "bg-red-500/20" :
+                                announcement.priority === "normal" ? "bg-blue-500/20" :
+                                "bg-green-500/20"
+                              )}>
+                                <AlertCircle className={cn(
+                                  "h-4 w-4",
+                                  announcement.priority === "high" ? "text-red-500" :
+                                  announcement.priority === "normal" ? "text-blue-500" :
+                                  "text-green-500"
+                                )} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm mb-1">{announcement.title}</p>
+                                <p className="text-xs text-muted-foreground leading-relaxed">{announcement.message}</p>
+                                {announcement.createdAt && announcement.createdAt.toDate && (
+                                  <p className="text-[10px] text-muted-foreground mt-2">
+                                    {new Date(announcement.createdAt.toDate()).toLocaleDateString()}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {notifications.length === 0 && announcements.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-12 text-center">
                         <Bell className="h-12 w-12 text-muted-foreground/30 mb-3" />
-                        <p className="text-sm text-muted-foreground">No notifications yet</p>
+                        <p className="text-sm text-muted-foreground">No notifications or announcements</p>
                       </div>
-                    ) : (
+                    ) : notifications.length > 0 ? (
                       <div className="p-2 space-y-1">
                         {notifications.map((notif) => (
                           <div
@@ -236,7 +302,7 @@ export default function Layout() {
                           </div>
                         ))}
                       </div>
-                    )}
+                    ) : null}
                   </ScrollArea>
                 </PopoverContent>
               </Popover>

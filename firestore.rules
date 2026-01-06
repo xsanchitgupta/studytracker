@@ -108,10 +108,38 @@ service cloud.firestore {
       }
     }
     
-    // Users collection - allow read for all authenticated, write for own profile
+    // Admin-only collections
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create audit logs
+      allow update, delete: if false; // Audit logs are immutable
+    }
+    
+    match /security_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    match /system_settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    match /email_campaigns/{campaignId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Users collection - allow read for all authenticated, write for own profile or admin
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin();
       
       // User's personal playlists
       match /playlists/{playlistId} {
@@ -125,6 +153,11 @@ service cloud.firestore {
       
       // User's flashcards
       match /flashcards/{deckId} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      
+      // User's flashcard decks
+      match /flashcardDecks/{deckId} {
         allow read, write: if request.auth.uid == userId;
       }
       

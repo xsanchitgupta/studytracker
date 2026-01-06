@@ -1,298 +1,528 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import {
-  BookOpen, Target, Trophy, Play, TrendingUp, ArrowRight, Zap,
-  Cpu, CheckCircle2, Menu, X, ChevronRight, Sparkles, ShieldCheck,
-  Activity, Layers, Brain, Clock, Award, GraduationCap, Medal,
-  MessageSquare, LayoutDashboard, BarChart3, ListVideo
+  BookOpen,
+  Trophy,
+  Play,
+  ArrowRight,
+  CheckCircle2,
+  Layout,
+  Target,
+  Users,
+  Search,
+  Code2,
+  Cpu,
+  GraduationCap,
+  ChevronDown,
+  Quote,
+  Star,
+  Sun,
+  Moon
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
-// --- CORE BUTTERMAX COMPONENTS ---
+// --- CUSTOM STYLES & ANIMATIONS ---
+const customStyles = `
+  /* Dark Mode Glass */
+  .dark .glass-pill {
+    background: rgba(18, 18, 18, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+  /* Light Mode Glass */
+  .glass-pill {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+  }
 
-const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
-  const divRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
+  /* Spotlights */
+  .dark .hero-spotlight {
+    background: radial-gradient(circle at 50% -20%, rgba(120, 50, 255, 0.15) 0%, rgba(0, 0, 0, 0) 50%);
+  }
+  .hero-spotlight {
+    background: radial-gradient(circle at 50% -20%, rgba(120, 50, 255, 0.05) 0%, rgba(255, 255, 255, 0) 50%);
+  }
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!divRef.current) return;
-    const rect = divRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
+  /* Grid Backgrounds */
+  .dark .grid-bg {
+    background-size: 50px 50px;
+    background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  }
+  .grid-bg {
+    background-size: 50px 50px;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  }
 
-  return (
-    <div
-      ref={divRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setOpacity(1)}
-      onMouseLeave={() => setOpacity(0)}
-      className={cn(
-        "relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border border-border/50 bg-background/50 backdrop-blur-md transition-all duration-500 hover:border-primary/40 hover:shadow-[0_0_50px_-12px_rgba(var(--primary-rgb),0.2)]",
-        className
-      )}
+  @keyframes scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .animate-scroll {
+    animation: scroll 40s linear infinite;
+  }
+`;
+
+// --- COMPONENTS ---
+
+const ThemeToggle = ({ theme, toggleTheme }: { theme: string, toggleTheme: () => void }) => (
+    <button 
+        onClick={toggleTheme}
+        className="p-2 rounded-full transition-colors hover:bg-black/5 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-400"
+        aria-label="Toggle theme"
     >
-      <div
-        className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 hidden md:block"
-        style={{
-          opacity,
-          background: `radial-gradient(600px circle at ${position.x}px ${position.y}px, rgba(var(--primary-rgb), 0.1), transparent 40%)`,
-        }}
-      />
-      <div className="absolute inset-0 md:hidden pointer-events-none bg-gradient-to-b from-primary/5 to-transparent" />
-      <div className="relative h-full z-10">{children}</div>
+        {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
+);
+
+const PillNavbar = ({ theme, toggleTheme }: { theme: string, toggleTheme: () => void }) => {
+    const navigate = useNavigate();
+    return (
+        <div className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4 animate-in fade-in slide-in-from-top-4 duration-1000">
+            <nav className="glass-pill w-full max-w-4xl rounded-full pl-6 pr-2 py-2 flex items-center justify-between transition-all duration-300">
+                {/* Logo */}
+                <div 
+                    className="flex items-center gap-3 cursor-pointer group" 
+                    onClick={() => navigate('/')}
+                >
+                    <div className="bg-purple-500/10 p-2 rounded-lg border border-purple-500/20 group-hover:bg-purple-500/20 transition-colors">
+                        <BookOpen className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <span className="font-bold text-zinc-900 dark:text-white tracking-tight hidden sm:block">StudySync</span>
+                </div>
+
+                {/* Links */}
+                <div className="hidden md:flex items-center gap-2">
+                    {['Features', 'Leaderboard', 'Pricing'].map((item) => (
+                        <a 
+                            key={item} 
+                            href={`#${item.toLowerCase()}`}
+                            className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all hover:bg-black/5 dark:hover:bg-white/5 rounded-full"
+                        >
+                            {item}
+                        </a>
+                    ))}
+                </div>
+
+                {/* Right Side */}
+                <div className="flex items-center gap-3">
+                    <div className="w-px h-6 bg-black/5 dark:bg-white/10 hidden sm:block" />
+                    
+                    <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
+                    
+                    <Button 
+                        onClick={() => navigate('/auth')} 
+                        className="rounded-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-medium px-6 h-10 shadow-[0_0_20px_rgba(124,58,237,0.3)] transition-all hover:scale-105"
+                    >
+                        Get Started
+                    </Button>
+                </div>
+            </nav>
+        </div>
+    )
+}
+
+const NeonCard = ({ children, className = "", delay = "0" }: { children: React.ReactNode, className?: string, delay?: string }) => {
+  return (
+    <div className={`relative group isolate animate-in fade-in slide-in-from-bottom-8 duration-700 ${delay}`}>
+        <div className="absolute -inset-[1px] bg-gradient-to-r from-purple-600 via-fuchsia-600 to-purple-600 rounded-2xl opacity-0 group-hover:opacity-50 blur-sm transition duration-500" />
+        <div className={cn("relative h-full bg-white dark:bg-[#0a0a0a] rounded-xl border border-black/5 dark:border-white/10 p-6 transition-all duration-300 group-hover:bg-zinc-50 dark:group-hover:bg-[#0f0f0f] shadow-sm dark:shadow-none", className)}>
+            {children}
+        </div>
     </div>
   );
 };
 
-const TiltCard = ({ children, className = "", id }: { children: React.ReactNode; className?: string; id?: string }) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [rotate, setRotate] = useState({ x: 0, y: 0 });
+// 3D App Preview
+const AppPreview = () => (
+  <div className="relative mx-auto max-w-6xl mt-24 perspective-[2000px] group px-4">
+    {/* The Purple Floor Glow */}
+    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[60%] bg-purple-600/15 blur-[100px] rounded-full -z-10" />
+    
+    <div className="relative rounded-xl bg-white dark:bg-[#09090b] border border-black/10 dark:border-white/10 shadow-2xl transform rotate-x-[12deg] transition-all duration-1000 ease-out hover:rotate-x-0 hover:scale-[1.01] overflow-hidden">
+      {/* Window Controls */}
+      <div className="h-10 border-b border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5 flex items-center px-4 justify-between">
+        <div className="flex gap-2">
+          <div className="w-3 h-3 rounded-full bg-[#FF5F56]" />
+          <div className="w-3 h-3 rounded-full bg-[#FFBD2E]" />
+          <div className="w-3 h-3 rounded-full bg-[#27C93F]" />
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1 rounded bg-black/5 dark:bg-black/20 border border-black/5 dark:border-white/5 text-[10px] text-zinc-500">
+            <Search className="w-3 h-3" /> studysync.app/dashboard
+        </div>
+      </div>
+      
+      {/* Dashboard UI */}
+      <div className="flex h-[550px] md:h-[650px] bg-zinc-50 dark:bg-[#050505]">
+        {/* Sidebar */}
+        <div className="w-20 md:w-64 border-r border-black/5 dark:border-white/5 bg-white dark:bg-[#0a0a0a] p-5 flex flex-col gap-6">
+           <div className="flex items-center gap-3 px-2 mb-4 opacity-50">
+               <div className="h-2 w-20 bg-zinc-200 dark:bg-zinc-700 rounded-full" />
+           </div>
+           {[1,2,3,4].map(i => (
+             <div key={i} className={`h-10 w-full rounded-lg flex items-center px-3 gap-3 ${i===1 ? 'bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400' : 'text-zinc-400 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-400'}`}>
+                <div className="w-5 h-5 rounded bg-current opacity-20" />
+                <div className="hidden md:block h-2 w-24 rounded-full bg-current opacity-20" />
+             </div>
+           ))}
+           <div className="mt-auto rounded-xl bg-gradient-to-br from-purple-500/10 to-transparent p-4 border border-purple-500/10 hidden md:block">
+               <div className="h-2 w-20 bg-purple-500/40 rounded-full mb-2" />
+               <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-800 rounded-full"><div className="w-3/4 h-full bg-purple-500" /></div>
+           </div>
+        </div>
+        
+        {/* Content */}
+        <div className="flex-1 p-8 overflow-hidden bg-zinc-50 dark:bg-[#050505]">
+            <div className="flex justify-between items-end mb-8">
+                <div>
+                    <h2 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">My Dashboard</h2>
+                    <div className="h-2 w-32 bg-zinc-200 dark:bg-zinc-800 rounded-full" />
+                </div>
+                <div className="w-10 h-10 rounded-full bg-purple-500/10 dark:bg-purple-500/20 flex items-center justify-center border border-purple-500/20 dark:border-purple-500/30">
+                    <span className="text-purple-600 dark:text-purple-400 font-bold">AT</span>
+                </div>
+            </div>
 
-  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (window.innerWidth < 768) return; 
-    if (!cardRef.current) return;
-    const card = cardRef.current.getBoundingClientRect();
-    const x = (e.clientX - card.left - card.width / 2) / (card.width / 2) * 8;
-    const y = (e.clientY - card.top - card.height / 2) / (card.height / 2) * -8;
-    setRotate({ x: y, y: x });
-  };
-
-  return (
-    <div
-      id={id}
-      ref={cardRef}
-      onMouseMove={onMouseMove}
-      onMouseLeave={() => setRotate({ x: 0, y: 0 })}
-      style={{
-        transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(1.01, 1.01, 1.01)`,
-        willChange: "transform",
-      }}
-      className={cn("relative overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border border-white/10 bg-background/40 backdrop-blur-3xl shadow-2xl transition-transform duration-200 ease-out group", className)}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-      <div className="relative z-10 h-full">{children}</div>
+            <div className="grid grid-cols-3 gap-6 h-full pb-10">
+                {/* Chart */}
+                <div className="col-span-3 md:col-span-2 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-white/[0.02] p-6 relative group overflow-hidden shadow-sm dark:shadow-none">
+                    <div className="absolute inset-0 bg-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="flex justify-between mb-8">
+                        <div className="h-4 w-32 bg-zinc-100 dark:bg-zinc-800 rounded" />
+                        <div className="h-8 w-24 bg-purple-600 rounded-lg shadow-lg shadow-purple-900/20" />
+                    </div>
+                    <div className="flex items-end justify-between h-64 gap-3">
+                        {[35, 60, 45, 80, 55, 90, 70, 40, 65, 85].map((h, i) => (
+                            <div key={i} className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-sm hover:bg-purple-500 transition-all duration-300 origin-bottom hover:scale-y-105" style={{ height: `${h}%` }} />
+                        ))}
+                    </div>
+                </div>
+                {/* Side Widgets */}
+                <div className="col-span-3 md:col-span-1 space-y-6">
+                    <div className="h-40 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-white/[0.02] p-6 flex flex-col items-center justify-center relative overflow-hidden shadow-sm dark:shadow-none">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 dark:bg-purple-500/20 blur-[40px] rounded-full" />
+                        <span className="text-5xl font-bold text-zinc-900 dark:text-white mb-2">14</span>
+                        <span className="text-sm text-zinc-500 uppercase tracking-widest">Day Streak</span>
+                    </div>
+                    <div className="h-40 rounded-2xl border border-black/5 dark:border-white/5 bg-white dark:bg-white/[0.02] p-6 flex flex-col justify-center shadow-sm dark:shadow-none">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            <span className="font-bold text-zinc-900 dark:text-white">Live Session</span>
+                        </div>
+                        <div className="flex -space-x-2">
+                            {[1,2,3,4].map(i => <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-black bg-zinc-200 dark:bg-zinc-700" />)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
     </div>
-  );
-};
+  </div>
+);
 
-// --- MAIN LANDING PAGE ---
+const Testimonials = () => {
+    const reviews = [
+        { name: "Ansh Tiwari", role: "CS Undergrad", text: "This app literally saved my GPA. The focus mode is insane." },
+        { name: "Sarah Jenkins", role: "Med Student", text: "I've tried every study app. This is the only one that stuck." },
+        { name: "David Chen", role: "Engineering", text: "The leaderboard actually makes me want to study more. It's addictive." },
+        { name: "Priya Patel", role: "Law", text: "Clean, fast, and no distractions. Exactly what I needed." },
+        { name: "Marcus Johnson", role: "Business", text: "The analytics helped me realize I was studying at the wrong times." },
+    ];
+    
+    return (
+        <div className="w-full py-20 overflow-hidden relative border-y border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-black/50 backdrop-blur-sm">
+            <div className="absolute inset-y-0 left-0 w-20 md:w-60 bg-gradient-to-r from-white dark:from-black to-transparent z-10" />
+            <div className="absolute inset-y-0 right-0 w-20 md:w-60 bg-gradient-to-l from-white dark:from-black to-transparent z-10" />
+            
+            <div className="flex animate-scroll hover:[animation-play-state:paused] w-max gap-8 px-8">
+                {[...reviews, ...reviews].map((review, i) => (
+                    <div key={i} className="w-[350px] rounded-2xl border border-black/5 dark:border-white/10 bg-white dark:bg-[#0a0a0a] p-6 flex flex-col gap-4 hover:border-purple-500/30 transition-colors shadow-sm dark:shadow-none">
+                        <div className="flex gap-1 text-purple-500">
+                            {[1,2,3,4,5].map(s => <Star key={s} className="w-4 h-4 fill-current" />)}
+                        </div>
+                        <p className="text-zinc-600 dark:text-zinc-300 text-sm leading-relaxed">"{review.text}"</p>
+                        <div className="flex items-center gap-3 mt-auto pt-4 border-t border-black/5 dark:border-white/5">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-xs text-white">{review.name[0]}</div>
+                            <div>
+                                <div className="text-sm font-bold text-zinc-900 dark:text-white">{review.name}</div>
+                                <div className="text-xs text-zinc-500">{review.role}</div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+const FAQItem = ({ q, a }: { q: string, a: string }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="border-b border-black/5 dark:border-white/10 last:border-0">
+            <button 
+                className="w-full py-6 flex items-center justify-between text-left hover:text-purple-600 dark:hover:text-purple-400 transition-colors group"
+                onClick={() => setOpen(!open)}
+            >
+                <span className="text-lg font-medium text-zinc-800 dark:text-zinc-200 group-hover:translate-x-2 transition-transform">{q}</span>
+                <ChevronDown className={cn("w-5 h-5 text-zinc-400 dark:text-zinc-500 transition-transform duration-300", open ? "rotate-180" : "")} />
+            </button>
+            <div className={cn("overflow-hidden transition-all duration-500 ease-in-out", open ? "max-h-40 pb-6 opacity-100" : "max-h-0 opacity-0")}>
+                <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed pr-10">{a}</p>
+            </div>
+        </div>
+    )
+}
+
+// --- MAIN PAGE ---
 
 const Landing = () => {
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    // Initialize theme based on preference or default to dark
+    const root = window.document.documentElement;
+    root.classList.add("dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const root = window.document.documentElement;
+    if (theme === "dark") {
+        root.classList.remove("dark");
+        setTheme("light");
+    } else {
+        root.classList.add("dark");
+        setTheme("dark");
+    }
+  };
 
   if (!mounted) return null;
 
-  const textColor = theme === "dark" ? "text-zinc-100" : "text-zinc-950";
-  const secondaryTextColor = "text-muted-foreground";
-
   return (
-    <div className={cn("min-h-screen selection:bg-primary/30 font-sans overflow-x-hidden antialiased",
-      theme === "dark" ? "bg-[#030303]" : "bg-zinc-50"
-    )}>
+    <div className="min-h-screen bg-white dark:bg-black text-zinc-950 dark:text-white font-sans selection:bg-purple-500/30 overflow-x-hidden transition-colors duration-300">
+      <style>{customStyles}</style>
+      
+      {/* Background Layers */}
+      <div className="fixed inset-0 z-0 grid-bg pointer-events-none" />
+      <div className="fixed top-0 left-0 right-0 h-[80vh] hero-spotlight pointer-events-none z-0" />
 
-      {/* BACKGROUND ENGINE */}
-      <div className="fixed inset-0 -z-10 h-full w-full pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] h-[100vw] w-[100vw] rounded-full bg-primary/5 blur-[120px] opacity-50" />
-        <div className="absolute bottom-[-10%] right-[-10%] h-[80vw] w-[80vw] rounded-full bg-purple-600/5 blur-[100px] opacity-50" />
-        <div className="h-full w-full opacity-[0.03] dark:opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
-      </div>
+      <PillNavbar theme={theme} toggleTheme={toggleTheme} />
 
-      {/* NAVBAR */}
-      <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-3 px-3 md:pt-6 md:px-6">
-        <nav className={cn(
-          "flex items-center justify-between gap-4 rounded-full border px-4 py-2.5 md:px-8 md:py-4 shadow-2xl backdrop-blur-2xl transition-all duration-500 w-full max-w-6xl",
-          theme === "dark" ? "bg-black/60 border-white/10" : "bg-white/60 border-zinc-200"
-        )}>
-          <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => navigate("/")}>
-            <div className="bg-primary p-2 rounded-xl text-primary-foreground shadow-[0_0_20px_rgba(var(--primary-rgb),0.4)] transition-transform group-hover:scale-105 active:scale-95">
-              <Zap className="h-4 w-4 md:h-5 md:w-5 fill-current" />
+      <main className="relative z-10">
+        
+        {/* HERO SECTION */}
+        <section className="pt-40 pb-32 px-4 text-center relative">
+            
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/20 bg-purple-500/5 dark:bg-purple-900/10 backdrop-blur-md mb-12 hover:border-purple-500/40 transition-all cursor-default animate-in fade-in zoom-in duration-700">
+                <GraduationCap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <span className="text-xs text-purple-900 dark:text-purple-100 font-medium">Made by students of <span className="font-bold">GLBITM</span></span>
             </div>
-            <span className={cn("font-black tracking-tighter text-lg md:text-xl uppercase italic leading-none", textColor)}>StudySync</span>
-          </div>
-          
-          <div className="hidden lg:flex items-center gap-10 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/60">
-            <a href="#dashboard" className="hover:text-primary transition-all hover:tracking-[0.4em]">Dashboard</a>
-            <a href="#performance" className="hover:text-primary transition-all hover:tracking-[0.4em]">Performance</a>
-            <a href="#leaderboard" className="hover:text-primary transition-all hover:tracking-[0.4em]">Leaderboard</a>
-          </div>
 
-          <div className="flex items-center gap-2 md:gap-4">
-            <ThemeToggle />
-            <Button onClick={() => navigate("/auth")} className="rounded-full px-5 md:px-8 h-10 md:h-12 font-black uppercase tracking-widest bg-primary hover:bg-primary/90 text-white shadow-lg text-[10px] md:text-xs">
-              Initialize
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="lg:hidden rounded-full h-10 w-10 text-muted-foreground">
-               <Menu className="h-5 w-5" />
-            </Button>
-          </div>
-        </nav>
-      </div>
+            {/* Main Title - Massive & Stacked */}
+            <div className="relative z-10 mb-8 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black tracking-tighter leading-[0.85] text-zinc-200 dark:text-white mix-blend-overlay opacity-50 select-none absolute top-1 left-0 right-0 blur-sm transform scale-105 hidden dark:block">
+                    STUDY<br/>SYNC
+                </h1>
+                <h1 className="text-6xl sm:text-8xl md:text-9xl font-black tracking-tighter leading-[0.85] text-transparent bg-clip-text bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-500 dark:from-white dark:via-white dark:to-zinc-500 relative">
+                    STUDY<br/>SYNC
+                </h1>
+            </div>
+            
+            {/* Subtext */}
+            <p className="text-zinc-500 dark:text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto mb-12 leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+                The operating system for high achievers. 
+                <br className="hidden md:block"/>
+                Manage your academic life with <span className="text-zinc-900 dark:text-white font-medium">military precision</span>.
+            </p>
 
-      {/* MOBILE MENU */}
-      <div className={cn(
-        "fixed inset-0 z-[60] bg-background/98 backdrop-blur-3xl transition-all duration-500 lg:hidden flex flex-col p-8",
-        mobileMenuOpen ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
-      )}>
-        <div className="flex justify-between items-center mb-16">
-          <span className="font-black tracking-tighter text-2xl uppercase italic text-primary">StudySync</span>
-          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)} className="rounded-full border text-foreground"><X /></Button>
-        </div>
-        <div className="flex flex-col gap-8 text-4xl font-black uppercase italic tracking-tighter text-foreground">
-          <a href="#dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</a>
-          <a href="#performance" onClick={() => setMobileMenuOpen(false)}>Performance</a>
-          <a href="#leaderboard" onClick={() => setMobileMenuOpen(false)}>Leaderboard</a>
-        </div>
-        <Button size="lg" className="mt-auto w-full rounded-2xl h-20 text-xl font-black uppercase tracking-widest italic" onClick={() => navigate('/auth')}>Start Protocol</Button>
-      </div>
-
-      {/* HERO SECTION */}
-      <main className="container mx-auto px-6 pt-40 pb-20 md:pt-64 md:pb-32 text-center relative">
-        <h1 className={cn("mx-auto max-w-[1400px] text-[clamp(2.5rem,12vw,12rem)] font-black tracking-tighter leading-[0.85] uppercase italic transition-all", textColor)}>
-          Elevate <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-b from-primary via-primary to-purple-800 drop-shadow-[0_0_30px_rgba(var(--primary-rgb),0.2)]">Learning.</span>
-        </h1>
-        <p className={cn("mx-auto mt-8 md:mt-16 max-w-3xl text-[clamp(1rem,2.5vw,1.5rem)] font-medium leading-relaxed px-4", secondaryTextColor)}>
-          The high-performance OS for modern scholars. Organize lectures, track cognitive milestones, and dominate global rankings with real-time biometric analytics.
-        </p>
-
-        <div className="mt-10 md:mt-16 flex flex-col items-center justify-center gap-4 sm:flex-row px-4">
-          <Button size="lg" onClick={() => navigate("/auth")} className="h-16 md:h-20 w-full sm:w-[400px] rounded-2xl px-12 text-lg md:text-xl font-black uppercase tracking-[0.4em] italic shadow-[0_20px_50px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] transition-all text-white">
-            Enter Dashboard
-          </Button>
-        </div>
-
-        {/* HERO PREVIEW */}
-        <div className="mt-24 md:mt-40 relative mx-auto max-w-6xl px-2 md:px-0">
-            <div className="absolute -inset-4 md:-inset-10 bg-primary/10 rounded-[3rem] md:rounded-[5rem] blur-[80px] md:blur-[120px] opacity-30 pointer-events-none" />
-            <TiltCard className="border-white/5 p-2 md:p-3 shadow-2xl">
-                <div className="aspect-[16/10] md:aspect-[21/9] rounded-[1.5rem] md:rounded-[2rem] bg-[#050505] relative flex items-center justify-center overflow-hidden border border-white/5">
-                    <Activity className="h-12 w-12 md:h-20 md:w-20 text-primary animate-pulse" />
-                    <div className="absolute bottom-8 md:bottom-12 space-y-4 flex flex-col items-center">
-                        <div className="h-1 md:h-1.5 w-48 md:w-80 bg-white/5 rounded-full overflow-hidden border border-white/10">
-                            <div className="h-full bg-primary w-[82%] animate-slide-right shadow-[0_0_15px_rgba(var(--primary-rgb),1)]" />
-                        </div>
-                        <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.5em] text-primary/80 uppercase">Neural Link Synced</p>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-24 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+                <Button 
+                    size="lg" 
+                    onClick={() => navigate('/auth')}
+                    className="h-14 px-8 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 font-bold text-lg transition-all hover:scale-105 shadow-xl dark:shadow-[0_0_50px_-15px_rgba(255,255,255,0.5)] w-full sm:w-auto"
+                >
+                    Launch App <ArrowRight className="ml-2 w-5 h-5" />
+                </Button>
+                <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer group">
+                    <div className="w-12 h-12 rounded-full border border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 flex items-center justify-center group-hover:bg-black/10 dark:group-hover:bg-white/10 transition-colors">
+                        <Play className="w-5 h-5 fill-current ml-1" />
                     </div>
+                    <span className="font-medium">Watch workflow</span>
                 </div>
-            </TiltCard>
+            </div>
+
+            <AppPreview />
+        </section>
+
+        {/* STATS STRIP */}
+        <div className="border-y border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/30 py-16 backdrop-blur-sm">
+             <div className="container mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                 {[
+                    { l: "Students", v: "10k+" },
+                    { l: "Universities", v: "120+" },
+                    { l: "Study Hours", v: "1.5M" },
+                    { l: "Tasks Crushed", v: "5M+" },
+                 ].map((s, i) => (
+                    <div key={i} className="space-y-2">
+                        <div className="text-3xl md:text-5xl font-bold text-zinc-900 dark:text-white tracking-tighter">{s.v}</div>
+                        <div className="text-xs text-zinc-500 uppercase tracking-widest font-mono">{s.l}</div>
+                    </div>
+                 ))}
+             </div>
         </div>
+
+        {/* TESTIMONIALS */}
+        <section className="py-32">
+            <div className="container mx-auto px-4 text-center mb-12">
+                 <h2 className="text-3xl font-bold mb-4 text-zinc-900 dark:text-white">Read what the top 1% say.</h2>
+                 <p className="text-zinc-500">Join thousands of students upgrading their workflow.</p>
+            </div>
+            <Testimonials />
+        </section>
+
+        {/* FEATURES GRID */}
+        <section id="features" className="container mx-auto px-4 py-20">
+            <div className="text-center mb-20">
+                <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight text-zinc-900 dark:text-white">The Full Stack.</h2>
+                <p className="text-zinc-500 dark:text-zinc-400 max-w-2xl mx-auto text-lg">Everything you need to go from chaotic to academic weapon.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <NeonCard delay="delay-0">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Code2 className="w-6 h-6 text-purple-600 dark:text-purple-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Distraction Free</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">Embed lectures directly. No sidebar recommendations. No comments section. Just content.</p>
+                </NeonCard>
+                <NeonCard delay="delay-100">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Trophy className="w-6 h-6 text-yellow-600 dark:text-yellow-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Global Rank</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">Compete against students in your specific major worldwide. Prove you are the best.</p>
+                </NeonCard>
+                <NeonCard delay="delay-200">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Cpu className="w-6 h-6 text-cyan-600 dark:text-cyan-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Data Analytics</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">We visualize your study habits. See your velocity and burnout risk before it happens.</p>
+                </NeonCard>
+                <NeonCard delay="delay-300">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Target className="w-6 h-6 text-red-600 dark:text-red-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Quest System</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">Turn boring assignments into XP-gaining quests. Level up your profile.</p>
+                </NeonCard>
+                <NeonCard delay="delay-400">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Users className="w-6 h-6 text-green-600 dark:text-green-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Study Pods</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">Real-time study rooms with friends. See who is active and hold each other accountable.</p>
+                </NeonCard>
+                <NeonCard delay="delay-500">
+                    <div className="w-12 h-12 rounded-lg bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center mb-6 border border-black/5 dark:border-white/5">
+                        <Layout className="w-6 h-6 text-pink-600 dark:text-pink-500" />
+                    </div>
+                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white">Command Center</h3>
+                    <p className="text-zinc-500 dark:text-zinc-400 leading-relaxed">Your entire academic life in one dashboard. Calendar, notes, and tasks unified.</p>
+                </NeonCard>
+            </div>
+        </section>
+
+        {/* FAQ SECTION */}
+        <section id="faq" className="container mx-auto px-4 py-32 max-w-3xl">
+            <h2 className="text-3xl font-bold mb-10 text-center text-zinc-900 dark:text-white">Frequently Asked Questions</h2>
+            <div className="space-y-4">
+                <FAQItem q="Is StudySync free for students?" a="Yes. The core features including task management, basic analytics, and playlists are 100% free for students with a valid .edu email." />
+                <FAQItem q="How does the leaderboard work?" a="You earn XP for completing tasks, maintaining streaks, and logging study hours. We normalize this data to rank you against peers in similar majors." />
+                <FAQItem q="Can I import from other tools?" a="We are working on Notion and Google Calendar integrations. They are coming in v2.1 next month." />
+                <FAQItem q="Is my data private?" a="Absolutely. We do not sell your data. Your study habits are yours alone, unless you choose to share them on the public leaderboard." />
+            </div>
+        </section>
+
+        {/* FINAL CTA */}
+        <section className="py-32 px-4 text-center relative overflow-hidden">
+            {/* Background Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/5 dark:bg-purple-600/10 blur-[120px] rounded-full -z-10 pointer-events-none" />
+            
+            <div className="max-w-3xl mx-auto">
+                <h2 className="text-5xl md:text-7xl font-bold tracking-tighter mb-8 text-zinc-900 dark:text-white">
+                    Ready to ascend?
+                </h2>
+                <p className="text-zinc-500 dark:text-zinc-400 text-lg mb-12 max-w-xl mx-auto">
+                    Join the platform built for students who treat their education like a high-stakes sport.
+                </p>
+                <Button 
+                    size="lg" 
+                    onClick={() => navigate('/auth')}
+                    className="h-16 px-12 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 font-bold text-xl shadow-xl dark:shadow-[0_0_60px_-15px_rgba(255,255,255,0.5)] transition-transform hover:scale-105"
+                >
+                    Get Started Free
+                </Button>
+            </div>
+        </section>
+
       </main>
 
-      {/* BENTO GRID */}
-      <section id="dashboard" className="container mx-auto px-4 py-20 md:py-32">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-6">
-          
-          <TiltCard className="md:col-span-4 p-8 md:p-12 min-h-[400px] md:min-h-[500px] flex flex-col justify-between">
-              <div>
-                <Badge className="bg-primary/20 text-primary mb-4 md:mb-6 font-black uppercase tracking-widest text-[9px] md:text-[10px]">Command Center</Badge>
-                <h3 className={cn("text-4xl md:text-6xl font-black tracking-tighter mb-4 md:mb-6 italic uppercase leading-none", textColor)}>The Unified <br /> Dashboard</h3>
-                <p className={cn("text-base md:text-xl leading-relaxed max-w-lg", secondaryTextColor)}>
-                  A high-density overview of your academic life. Monitor active streaks, upcoming goals, and lecture progress in one unified frame.
-                </p>
-              </div>
-              <LayoutDashboard className="h-10 w-10 md:h-14 md:w-14 text-primary/20" />
-          </TiltCard>
-
-          <SpotlightCard className="md:col-span-2 p-8 md:p-12 min-h-[400px] md:min-h-[500px] bg-gradient-to-br from-blue-500/5 to-transparent">
-              <Badge className="bg-blue-500/20 text-blue-400 mb-6 font-black uppercase tracking-widest text-[10px]">Intelligence</Badge>
-              <h3 className={cn("text-4xl md:text-5xl font-black tracking-tighter mb-6 italic uppercase leading-none", textColor)}>Smart <br /> Chat</h3>
-              <p className={cn("text-sm md:text-lg mb-8", secondaryTextColor)}>
-                Summarize lectures, clarify concepts, and generate flashcards from your existing notes using our integrated AI engine.
-              </p>
-              <MessageSquare className="h-16 w-16 text-blue-500/10" />
-          </SpotlightCard>
-
-          {/* PERFORMANCE SECTION (ID IS HERE NOW) */}
-          <TiltCard id="performance" className="md:col-span-3 p-8 md:p-12 min-h-[500px] border-emerald-500/10 bg-emerald-500/[0.02]">
-              <Badge className="bg-emerald-500/20 text-emerald-400 mb-6 font-black uppercase tracking-widest text-[10px]">Metrics</Badge>
-              <h3 className="text-4xl md:text-6xl font-black tracking-tighter mb-6 italic uppercase leading-none text-emerald-500">Study <br /> Velocity</h3>
-              <p className={cn("text-sm md:text-xl mb-10 leading-relaxed", secondaryTextColor)}>
-                Monitor session intensity and retention mastery through live subject distribution heatmaps.
-              </p>
-              <div className="flex items-end gap-1.5 h-24 md:h-32">
-                  {[40, 70, 45, 90, 65, 80, 100].map((h, i) => (
-                    <div key={i} className="flex-1 bg-emerald-500/20 rounded-t-md md:rounded-t-lg transition-all hover:bg-emerald-500" style={{ height: `${h}%` }} />
-                  ))}
-              </div>
-          </TiltCard>
-
-          <SpotlightCard className="md:col-span-3 p-8 md:p-12 min-h-[500px] bg-gradient-to-br from-purple-500/5 to-transparent">
-              <Badge className="bg-purple-500/20 text-purple-400 mb-6 font-black uppercase tracking-widest text-[10px]">Protocol</Badge>
-              <h3 className={cn("text-4xl md:text-6xl font-black tracking-tighter mb-6 italic uppercase leading-none", textColor)}>Smart <br /> Goals</h3>
-              <p className={cn("text-sm md:text-xl mb-10", secondaryTextColor)}>
-                Automated sub-goal decomposition for complex exams. Track completion history with visual milestones.
-              </p>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-black/40 border border-white/5">
-                <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
-                <span className="text-xs font-black uppercase tracking-widest opacity-40 italic text-white-400">Processing Sub-Goals...</span>
-              </div>
-          </SpotlightCard>
-        </div>
-      </section>
-
-      {/* HALL OF FAME */}
-      <section id="leaderboard" className="container mx-auto px-4 py-20 text-center border-t border-border/10 bg-background/20">
-          <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(234,179,8,0.2)] animate-bounce" />
-          <h2 className={cn("text-5xl md:text-8xl font-black tracking-tighter italic uppercase mb-6 leading-none", textColor)}>Hall of <span className="text-primary">Fame</span></h2>
-          <p className={cn("max-w-2xl mx-auto text-sm md:text-xl mb-12", secondaryTextColor)}>
-            Global rankings updated in real-time based on cognitive output and streak consistency.
-          </p>
-          <Button onClick={() => navigate("/leaderboard")} variant="outline" className={cn("rounded-full border-2 h-14 md:h-16 px-8 md:px-12 font-black uppercase tracking-widest italic transition-all", 
-             theme === 'dark' ? 'hover:bg-white hover:text-black border-white/10' : 'hover:bg-zinc-950 hover:text-white border-zinc-200'
-          )}>
-            View Rankings
-          </Button>
-      </section>
-
-      {/* CTA */}
-      <section className="container mx-auto px-4 py-32 md:py-64">
-          <div className="rounded-[2.5rem] md:rounded-[4rem] bg-gradient-to-b from-primary to-purple-900 p-12 md:p-32 relative overflow-hidden text-center group border border-white/20 shadow-2xl">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1),transparent_70%)] opacity-50" />
-              <h2 className="text-5xl md:text-[clamp(4rem,10vw,10rem)] font-black tracking-tighter italic uppercase text-white mb-10 md:mb-16 relative z-10 leading-[0.85]">
-                Initiate <br /> Protocol
-              </h2>
-              <Button onClick={() => navigate("/auth")} size="lg" className="rounded-full bg-white text-black h-16 md:h-24 px-10 md:px-16 text-lg md:text-2xl font-black uppercase tracking-[0.4em] hover:scale-110 transition-all relative z-10">
-                 Connect Now
-              </Button>
-          </div>
-      </section>
-
       {/* FOOTER */}
-      <footer className="border-t border-white/5 py-16 md:py-24 bg-black">
-        <div className="container mx-auto px-6 flex flex-col md:flex-row justify-between items-center md:items-end gap-12 text-center md:text-left">
-            <div className="space-y-6">
-                <div className="flex items-center gap-3 justify-center md:justify-start">
-                  <Layers className="h-6 w-6 md:h-8 md:w-8 text-primary fill-current" />
-                  <span className="font-black tracking-tighter text-3xl md:text-4xl uppercase italic text-white">StudySync</span>
-                </div>
-                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.5em] text-white/20 leading-relaxed">
-                  Advanced Cognitive OS <br /> Global Scholar Network <br /> v2.0 Production Build
-                </p>
-            </div>
-            <div className="text-center md:text-right">
-               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary mb-2 italic">Precision Learning</p>
-               <p className="text-3xl md:text-5xl font-black italic text-white/5 tracking-tighter uppercase leading-none">Victory Favors <br className="md:hidden" /> the Disciplined</p>
-            </div>
-        </div>
+      <footer className="border-t border-black/5 dark:border-white/10 bg-zinc-50 dark:bg-[#050505] py-16 text-sm">
+          <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-10">
+              <div className="col-span-1 md:col-span-2">
+                  <div className="flex items-center gap-2 mb-4">
+                      <div className="bg-purple-500/20 p-1 rounded">
+                        <BookOpen className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      <span className="font-bold text-lg text-zinc-900 dark:text-white">StudySync</span>
+                  </div>
+                  <p className="text-zinc-500 max-w-xs mb-6">
+                      The high-performance study OS designed by students, for students.
+                  </p>
+                  <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-500 border border-black/5 dark:border-white/5 rounded-full px-3 py-1 w-fit">
+                      <GraduationCap className="w-4 h-4" />
+                      <span>Built at <span className="text-zinc-900 dark:text-zinc-400 font-bold">GLBITM</span></span>
+                  </div>
+              </div>
+              
+              <div>
+                  <h4 className="font-bold text-zinc-900 dark:text-white mb-6">Product</h4>
+                  <ul className="space-y-3 text-zinc-500">
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Features</a></li>
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Leaderboard</a></li>
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Pricing</a></li>
+                  </ul>
+              </div>
+              
+              <div>
+                  <h4 className="font-bold text-zinc-900 dark:text-white mb-6">Legal</h4>
+                  <ul className="space-y-3 text-zinc-500">
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Privacy Policy</a></li>
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Terms of Service</a></li>
+                      <li><a href="#" className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Twitter / X</a></li>
+                  </ul>
+              </div>
+          </div>
+          <div className="container mx-auto px-4 mt-16 pt-8 border-t border-black/5 dark:border-white/5 text-center text-zinc-500 dark:text-zinc-700">
+              © 2026 StudySync Inc. All rights reserved.
+          </div>
       </footer>
-      
-      <style>{`
-        html { scroll-behavior: smooth; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-        .animate-float { animation: float 6.s ease-in-out infinite; }
-        @keyframes slide-right { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        .animate-slide-right { animation: slide-right 3s linear infinite; }
-      `}</style>
     </div>
   );
 };

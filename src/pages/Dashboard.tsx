@@ -7,7 +7,7 @@ import { getEarnedBadges } from "@/lib/badges";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
@@ -30,7 +30,12 @@ import {
   MessageSquare,
   ListVideo,
   Activity,
-  Sparkles
+  Sparkles,
+  Bell,
+  Megaphone,
+  X,
+  Info,
+  AlertCircle
 } from "lucide-react";
 
 // --- TYPES ---
@@ -113,6 +118,15 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState<VideoActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState("Welcome back");
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState<any>({
+    totalWatchTime: 0,
+    weeklyWatchTime: 0,
+    previousWeekWatchTime: 0,
+    studySessions: 0,
+    lastWeekSessions: 0
+  });
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -136,10 +150,45 @@ export default function Dashboard() {
       });
       setVideos(vids);
       setRecentActivity(vids.filter(v => v.updatedAt).sort((a, b) => b.updatedAt!.toMillis() - a.updatedAt!.toMillis()).slice(0, 5));
+      
+      // Calculate real watch time statistics
+      const now = Date.now();
+      const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
+      const twoWeeksAgo = now - (14 * 24 * 60 * 60 * 1000);
+      
+      const totalWatchTime = vids.reduce((sum, v) => sum + (v.watchTime || 0), 0);
+      const weeklyVideos = vids.filter(v => v.updatedAt && v.updatedAt.toMillis() >= weekAgo);
+      const weeklyWatchTime = weeklyVideos.reduce((sum, v) => sum + (v.watchTime || 0), 0);
+      
+      const previousWeekVideos = vids.filter(v => 
+        v.updatedAt && 
+        v.updatedAt.toMillis() >= twoWeeksAgo && 
+        v.updatedAt.toMillis() < weekAgo
+      );
+      const previousWeekWatchTime = previousWeekVideos.reduce((sum, v) => sum + (v.watchTime || 0), 0);
+      
+      setUserStats({
+        totalWatchTime,
+        weeklyWatchTime,
+        previousWeekWatchTime,
+        studySessions: weeklyVideos.length,
+        lastWeekSessions: previousWeekVideos.length
+      });
+      
       setLoading(false);
     });
 
-    return () => { unsubGoals(); unsubPlaylists(); };
+    // Fetch announcements
+    const unsubAnnouncements = onSnapshot(query(collection(db, "announcements")), snap => {
+      setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((a: any) => a.active));
+    });
+
+    // Fetch user notifications
+    const unsubNotifications = onSnapshot(query(collection(db, "users", user.uid, "notifications")), snap => {
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((n: any) => !n.read));
+    });
+
+    return () => { unsubGoals(); unsubPlaylists(); unsubAnnouncements(); unsubNotifications(); };
   }, [user]);
 
   const stats = useMemo(() => {
@@ -150,11 +199,47 @@ export default function Dashboard() {
       if (!isComplete && g.deadline && g.deadline < now) overdue++;
     });
 
-    const days = new Set(videos.filter(v => v.updatedAt).map(v => v.updatedAt!.toDate().toDateString()));
-    let streakCount = 0; const today = new Date();
-    for (let i = 0; i < 365; i++) {
-      const d = new Date(); d.setDate(today.getDate() - i);
-      if (days.has(d.toDateString())) streakCount++; else if (i > 0) break;
+    // Real streak calculation: consecutive days with study activity
+    let streakCount = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const activityDays = new Set(
+      videos
+        .filter(v => v.updatedAt)
+        .map(v => {
+          const d = v.updatedAt!.toDate();
+          d.setHours(0, 0, 0, 0);
+          return d.getTime();
+        })
+    );
+    
+    // Check consecutive days starting from today or yesterday
+    let checkDate = new Date(today);
+    let daysMissed = 0;
+    
+    // Allow starting from yesterday if no activity today
+    if (!activityDays.has(today.getTime())) {
+      checkDate.setDate(checkDate.getDate() - 1);
+      if (!activityDays.has(checkDate.getTime())) {
+        // No recent activity, streak is 0
+        streakCount = 0;
+        checkDate = new Date(today); // Reset for loop
+      }
+    }
+    
+    // Count consecutive days
+    if (activityDays.size > 0) {
+      for (let i = 0; i < 365; i++) {
+        if (activityDays.has(checkDate.getTime())) {
+          streakCount++;
+          daysMissed = 0;
+        } else {
+          daysMissed++;
+          if (daysMissed > 1) break; // Allow 1 day gap
+        }
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
     }
 
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
@@ -162,9 +247,11 @@ export default function Dashboard() {
     
     const weeklyData = Array.from({ length: 7 }).map((_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (6 - i));
+      const dayVideos = videos.filter(v => v.updatedAt?.toDate().toDateString() === d.toDateString());
       return { 
         day: d.toLocaleDateString('en-US', { weekday: 'short' }), 
-        value: videos.filter(v => v.updatedAt?.toDate().toDateString() === d.toDateString()).length 
+        value: dayVideos.length,
+        watchTime: dayVideos.reduce((sum, v) => sum + (v.watchTime || 0), 0)
       };
     });
 
@@ -172,17 +259,27 @@ export default function Dashboard() {
     const watchedLectures = videos.filter(v => v.completed).length;
     const badgeCount = getEarnedBadges({ watchedLectures, totalMinutes, completedGoals: completed }).length;
 
+    // Real watch time from userStats (in hours)
+    const weeklyHours = Math.round((userStats.weeklyWatchTime / 60) * 10) / 10;
+    
+    // Calculate trends
+    const watchTimeTrend = userStats.previousWeekWatchTime > 0
+      ? Math.round(((userStats.weeklyWatchTime - userStats.previousWeekWatchTime) / userStats.previousWeekWatchTime) * 100)
+      : userStats.weeklyWatchTime > 0 ? 100 : 0;
+
     return { 
       completed, 
       total: goals.length, 
       overdue, 
       streak: streakCount, 
-      weeklyHours: `${(activeVids.length * 0.5).toFixed(1)}h`, 
+      weeklyHours: `${weeklyHours}h`, 
       badgeCount, 
       weeklyData, 
-      monthlyProgress: Math.min(100, (activeVids.length / 30) * 100) 
+      monthlyProgress: Math.min(100, (activeVids.length / 30) * 100),
+      watchTimeTrend,
+      totalWatchTime: totalMinutes
     };
-  }, [goals, videos]);
+  }, [goals, videos, userStats]);
 
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
@@ -242,7 +339,14 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard icon={Flame} label="Bio-Streak" value={`${stats.streak} Days`} trend="up" trendValue="Peak" color="from-orange-500 to-red-500" />
         <StatCard icon={Target} label="Milestones" value={`${stats.completed}/${stats.total}`} trend={stats.completed > 0 ? "up" : undefined} trendValue="Active" color="from-emerald-500 to-green-500" />
-        <StatCard icon={Clock} label="Velocity" value={stats.weeklyHours} trend="up" trendValue="+12%" color="from-blue-500 to-cyan-500" />
+        <StatCard 
+          icon={Clock} 
+          label="Velocity" 
+          value={stats.weeklyHours} 
+          trend={stats.watchTimeTrend > 0 ? "up" : stats.watchTimeTrend < 0 ? "down" : "neutral"} 
+          trendValue={stats.watchTimeTrend > 0 ? `+${stats.watchTimeTrend}%` : stats.watchTimeTrend < 0 ? `${stats.watchTimeTrend}%` : "0%"} 
+          color="from-blue-500 to-cyan-500" 
+        />
         <StatCard icon={Medal} label="Reputation" value={stats.badgeCount} color="from-yellow-400 to-orange-500" />
       </div>
 
